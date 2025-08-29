@@ -134,18 +134,14 @@ FEATURE_CONFIG = {
 
 # Alert priority scoring weights
 ALERT_PRIORITY_WEIGHTS = {
-    "severity": {
-        "CRITICA": 40,
+    "severity": {  # Debe coincidir con tu enum severidad_alerta
         "ALTA": 30,
         "MEDIA": 20,
         "BAJA": 10
     },
-    "type": {
+    "type": {      # Debe coincidir con tu enum tipo_alerta
         "QUIEBRE_STOCK": 20,
-        "REPOSICION_URGENTE": 20,
-        "VENCIMIENTO": 15,
-        "DEMANDA_ANOMALA": 10,
-        "SOBRESTOCK": 5
+        "VENCIMIENTO": 15
     },
     "essential_medicine": 20,
     "time_pending": {
