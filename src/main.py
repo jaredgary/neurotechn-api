@@ -2,102 +2,104 @@
 Main FastAPI application for Farmacias Siman MVP - Predictive Inventory Management System
 """
 
-from fastapi import FastAPI, HTTPException, status
+from fastapi import FastAPI, HTTPException, status, Header, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from contextlib import asynccontextmanager
 import logging
 import os
 from datetime import datetime
-from typing import Dict, Any
+from typing import Dict, Any, Optional, List
 
-# Import local modules
-from src.config import settings
-from src.database import DatabaseManager
-from src.forecasting.xgboost_model import XGBoostForecaster
+# Local modules
+from src.database import DataRepository
+from src.forecasting.xgboost_model import PharmaceuticalForecastModel
 
-# Configure logging
+# -----------------------------------------------------------------------------
+# Logging
+# -----------------------------------------------------------------------------
 logging.basicConfig(
     level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 )
-logger = logging.getLogger(__name__)
+logger = logging.getLogger("neurotechn-api")
 
-# Lifespan context manager for startup and shutdown events
+# -----------------------------------------------------------------------------
+# Lifespan (startup/shutdown)
+# -----------------------------------------------------------------------------
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Startup
-    logger.info("Starting Farmacias Siman MVP API...")
-    app.state.db = DatabaseManager()
-    app.state.forecaster = XGBoostForecaster()
+    logger.info("Starting NeuroTecHN API...")
+    app.state.db: DataRepository = DataRepository()
+    app.state.forecaster: PharmaceuticalForecastModel = PharmaceuticalForecastModel()
     logger.info("API started successfully")
-    
     yield
-    
-    # Shutdown
-    logger.info("Shutting down API...")
-    if hasattr(app.state, 'db'):
-        await app.state.db.close()
+    logger.info("Shutting down API... (nothing to close)")
     logger.info("API shutdown complete")
 
-# Create FastAPI instance
+# -----------------------------------------------------------------------------
+# App
+# -----------------------------------------------------------------------------
 app = FastAPI(
-    title="Farmacias Siman - Sistema Predictivo de Inventario",
+    title="Farmacias Siman - Sistema Predictivo de Inventario (MVP)",
     description="API para gestión predictiva de inventario farmacéutico con XGBoost",
     version="1.0.0",
     lifespan=lifespan
 )
 
-# Configure CORS
+# CORS (ajusta dominios en producción)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Configure appropriately for production
+    allow_origins=["*"],   # <-- RESTRINGE en producción
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# Root endpoint
+# -----------------------------------------------------------------------------
+# Helpers
+# -----------------------------------------------------------------------------
+def _env(name: str, default: Optional[str] = None) -> Optional[str]:
+    v = os.getenv(name, default)
+    return v
+
+# -----------------------------------------------------------------------------
+# Root & Health
+# -----------------------------------------------------------------------------
 @app.get("/")
-async def root():
-    """Root endpoint with API information"""
+def root():
     return {
         "name": "Farmacias Siman MVP API",
-        "version": "1.0.0",
+        "version": app.version,
         "status": "operational",
-        "timestamp": datetime.utcnow().isoformat()
+        "timestamp": datetime.utcnow().isoformat(),
     }
 
-# Health check endpoint
 @app.get("/health")
-async def health_check():
-    """Health check endpoint for Docker and monitoring"""
+def health_check():
     try:
-        # Check database connection
-        db_status = "healthy"
-        if hasattr(app.state, 'db'):
-            db_status = await app.state.db.health_check()
-        
+        db_ok = app.state.db.db.test_connection()
         return {
-            "status": "healthy",
+            "status": "healthy" if db_ok else "degraded",
             "timestamp": datetime.utcnow().isoformat(),
             "services": {
                 "api": "healthy",
-                "database": db_status,
-                "model": "healthy" if hasattr(app.state, 'forecaster') else "not_initialized"
+                "database": "healthy" if db_ok else "unreachable",
+                "model": "healthy"
             }
         }
     except Exception as e:
-        logger.error(f"Health check failed: {str(e)}")
+        logger.exception("Health check failed")
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Service unhealthy"
+            detail=f"Service unhealthy: {e}"
         )
 
-# API Info endpoint
+# -----------------------------------------------------------------------------
+# API Info
+# -----------------------------------------------------------------------------
 @app.get("/api/info")
-async def api_info():
-    """Get API information and available endpoints"""
+def api_info():
     return {
         "name": app.title,
         "description": app.description,
@@ -106,25 +108,25 @@ async def api_info():
             "health": "/health",
             "docs": "/docs",
             "redoc": "/redoc",
-            "forecast": "/api/forecast",
-            "alerts": "/api/alerts",
-            "inventory": "/api/inventory",
-            "metrics": "/api/metrics"
+            "forecast": "/api/forecast (POST) + alias /forecast (POST)",
+            "forecast_latest": "/api/forecast/latest (GET)",
+            "alerts_list": "/api/alerts (GET)",
+            "alerts_ack": "/api/alerts/{alert_id}/acknowledge (POST)",
+            "inventory_current": "/api/inventory/current (GET)",
+            "metrics_model": "/api/metrics/model (GET)"
         }
     }
 
-# Forecast endpoints
+# -----------------------------------------------------------------------------
+# Forecast
+# -----------------------------------------------------------------------------
 @app.post("/api/forecast")
-async def create_forecast(
-    horizonte_dias: int = 7,
-    skus: list[str] = None
+def create_forecast(
+    horizonte_dias: int = Query(7, ge=7, le=28, description="7, 14 o 28"),
+    skus: Optional[List[str]] = Query(default=None, description="Lista de SKUs opcional")
 ):
     """
-    Generate forecast for specified SKUs and horizon
-    
-    Args:
-        horizonte_dias: Forecast horizon in days (7, 14, or 28)
-        skus: List of SKUs to forecast (optional, all if not specified)
+    Genera pronóstico para los SKUs dados y guarda resultados/ métricas en Supabase.
     """
     try:
         if horizonte_dias not in [7, 14, 28]:
@@ -132,214 +134,197 @@ async def create_forecast(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Horizon must be 7, 14, or 28 days"
             )
-        
-        # Generate forecast using the model
-        if hasattr(app.state, 'forecaster'):
-            result = await app.state.forecaster.generate_forecast(
-                horizon=horizonte_dias,
-                skus=skus
-            )
-            return {
-                "status": "success",
-                "horizon_days": horizonte_dias,
-                "skus_processed": len(result.get("forecasts", [])),
-                "run_id": result.get("run_id"),
-                "timestamp": datetime.utcnow().isoformat()
-            }
-        else:
-            raise HTTPException(
-                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                detail="Forecasting model not initialized"
-            )
-            
-    except Exception as e:
-        logger.error(f"Forecast generation failed: {str(e)}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Forecast generation failed: {str(e)}"
+
+        db: DataRepository = app.state.db
+        model: PharmaceuticalForecastModel = app.state.forecaster
+
+        # 1) ventas últimos TRAINING_WINDOW_DAYS
+        sales = db.get_sales_data()
+        if sales.empty:
+            return {"status": "no-data", "message": "No sales in last window"}
+
+        # Si se especifican SKUs, filtramos
+        if skus:
+            sales = sales[sales["sku"].isin(skus)]
+            if sales.empty:
+                return {"status": "no-data", "message": "No sales for provided SKUs"}
+
+        # 2) entrenar y pronosticar
+        forecasts_df, metrics_df, summary = model.train_and_forecast_all(
+            sales_df=sales,
+            skus=skus,
+            horizon_days=horizonte_dias,
+            save_models=False
         )
 
-@app.get("/api/forecast/latest")
-async def get_latest_forecast():
-    """Get the latest forecast run results"""
-    try:
-        if hasattr(app.state, 'db'):
-            result = await app.state.db.get_latest_forecast()
-            return result
-        else:
-            raise HTTPException(
-                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                detail="Database not connected"
-            )
+        # 3) registrar ejecución y persistir
+        run_id = db.save_forecast_run(
+            modelo="xgboost",
+            version="1.0.0",
+            horizonte_dias=horizonte_dias,
+            ventana_entrenamiento_dias=getattr(app.state.db.settings, "TRAINING_WINDOW_DAYS", 90),
+            parametros={"lags": [1, 7, 14, 28], "rolling": [7, 14, 28]},
+            skus_procesados=int(summary.get("total_skus", 0))
+        )
+
+        if not forecasts_df.empty:
+            db.save_forecasts(run_id, forecasts_df)
+        if not metrics_df.empty:
+            db.save_metrics(run_id, metrics_df)
+
+        # 4) actualizar notas del run
+        db.update_forecast_run(
+            run_id=run_id,
+            exito=True,
+            skus_procesados=int(summary.get("total_skus", 0)),
+            metricas_globales={"avg_mape": summary.get("avg_mape")}
+        )
+
+        return {
+            "status": "success",
+            "run_id": run_id,
+            "horizon_days": horizonte_dias,
+            "skus_processed": int(summary.get("total_skus", 0)),
+            "avg_mape": summary.get("avg_mape"),
+            "timestamp": datetime.utcnow().isoformat()
+        }
+
+    except HTTPException:
+        raise
     except Exception as e:
-        logger.error(f"Failed to retrieve latest forecast: {str(e)}")
+        logger.exception("Forecast generation failed")
+        # intenta etiquetar el run si ya existe (best-effort)
+        try:
+            if "run_id" in locals():
+                app.state.db.update_forecast_run(
+                    run_id=run_id, exito=False, skus_procesados=0, mensaje_error=str(e)
+                )
+        except Exception:
+            pass
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Forecast generation failed: {e}"
+        )
+
+# Alias para pg_cron/pg_net (usa header secreto)
+@app.post("/forecast")
+def forecast_alias(
+    horizonte_dias: int = Query(7, ge=7, le=28),
+    skus: Optional[List[str]] = Query(default=None),
+    x_cron_secret: Optional[str] = Header(default=None)
+):
+    expected = _env("CRON_SECRET")
+    if expected and x_cron_secret != expected:
+        raise HTTPException(status_code=401, detail="Invalid cron secret")
+    return create_forecast(horizonte_dias=horizonte_dias, skus=skus)
+
+@app.get("/api/forecast/latest")
+def get_latest_forecast(sku: Optional[str] = None):
+    """Devuelve pronósticos del último run (vista v_forecast_latest)."""
+    try:
+        db: DataRepository = app.state.db
+        df = db.get_latest_forecast(sku=sku)
+        return df.to_dict(orient="records")
+    except Exception as e:
+        logger.exception("Failed to retrieve latest forecast")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=str(e)
         )
 
-# Alert endpoints
+# -----------------------------------------------------------------------------
+# Alerts
+# -----------------------------------------------------------------------------
 @app.get("/api/alerts")
-async def get_alerts(
-    estado: str = "PENDIENTE",
-    severidad: str = None
+def get_alerts(
+    sku: Optional[str] = None,
+    tipo_alerta: Optional[str] = None,
+    severidad: Optional[str] = None
 ):
     """
-    Get alerts filtered by status and severity
-    
-    Args:
-        estado: Alert status (PENDIENTE, EN_REVISION, RESUELTA, DESCARTADA)
-        severidad: Alert severity (BAJA, MEDIA, ALTA, CRITICA)
+    Devuelve alertas activas (resuelta=false). Filtrable por sku/tipo_alerta/severidad.
     """
     try:
-        if hasattr(app.state, 'db'):
-            alerts = await app.state.db.get_alerts(
-                estado=estado,
-                severidad=severidad
-            )
-            return {
-                "status": "success",
-                "count": len(alerts),
-                "alerts": alerts
-            }
-        else:
-            raise HTTPException(
-                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                detail="Database not connected"
-            )
+        db: DataRepository = app.state.db
+        df = db.get_active_alerts(sku=sku, tipo_alerta=tipo_alerta, severidad=severidad)
+        return {
+            "status": "success",
+            "count": int(len(df)),
+            "alerts": df.to_dict(orient="records")
+        }
     except Exception as e:
-        logger.error(f"Failed to retrieve alerts: {str(e)}")
+        logger.exception("Failed to retrieve alerts")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=str(e)
         )
 
 @app.post("/api/alerts/{alert_id}/acknowledge")
-async def acknowledge_alert(
-    alert_id: int,
-    comentario: str = None
-):
-    """Acknowledge an alert and update its status"""
+def acknowledge_alert(alert_id: str, comentario: Optional[str] = None):
+    """Marca una alerta como resuelta (RPC ack_alert(p_id uuid))."""
     try:
-        if hasattr(app.state, 'db'):
-            result = await app.state.db.acknowledge_alert(
-                alert_id=alert_id,
-                comentario=comentario
-            )
-            return {
-                "status": "success",
-                "alert_id": alert_id,
-                "message": "Alert acknowledged successfully"
-            }
-        else:
-            raise HTTPException(
-                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                detail="Database not connected"
-            )
+        db: DataRepository = app.state.db
+        ok = db.acknowledge_alert(alert_id=alert_id, comentario=comentario)
+        if not ok:
+            raise HTTPException(status_code=500, detail="Failed to acknowledge alert")
+        return {"status": "success", "alert_id": alert_id, "message": "Alert acknowledged successfully"}
+    except HTTPException:
+        raise
     except Exception as e:
-        logger.error(f"Failed to acknowledge alert: {str(e)}")
+        logger.exception("Failed to acknowledge alert")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=str(e)
         )
 
-# Inventory endpoints
-@app.get("/api/inventory/status")
-async def get_inventory_status():
-    """Get current inventory status"""
+# -----------------------------------------------------------------------------
+# Inventory
+# -----------------------------------------------------------------------------
+@app.get("/api/inventory/current")
+def get_inventory_current(sku: Optional[str] = None):
+    """Último registro de inventario por SKU (ultimos 7 días)."""
     try:
-        if hasattr(app.state, 'db'):
-            status = await app.state.db.get_inventory_status()
-            return {
-                "status": "success",
-                "inventory": status,
-                "timestamp": datetime.utcnow().isoformat()
-            }
-        else:
-            raise HTTPException(
-                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                detail="Database not connected"
-            )
+        db: DataRepository = app.state.db
+        df = db.get_current_inventory(sku=sku)
+        return {
+            "status": "success",
+            "count": int(len(df)),
+            "inventory": df.to_dict(orient="records"),
+            "timestamp": datetime.utcnow().isoformat()
+        }
     except Exception as e:
-        logger.error(f"Failed to retrieve inventory status: {str(e)}")
+        logger.exception("Failed to retrieve current inventory")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=str(e)
         )
 
-@app.get("/api/inventory/critical")
-async def get_critical_inventory():
-    """Get critical inventory items (low stock or expiring soon)"""
-    try:
-        if hasattr(app.state, 'db'):
-            critical_items = await app.state.db.get_critical_inventory()
-            return {
-                "status": "success",
-                "count": len(critical_items),
-                "critical_items": critical_items
-            }
-        else:
-            raise HTTPException(
-                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                detail="Database not connected"
-            )
-    except Exception as e:
-        logger.error(f"Failed to retrieve critical inventory: {str(e)}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=str(e)
-        )
-
-# Metrics endpoints
+# -----------------------------------------------------------------------------
+# Metrics / KPIs
+# -----------------------------------------------------------------------------
 @app.get("/api/metrics/model")
-async def get_model_metrics():
-    """Get model performance metrics"""
+def get_model_metrics():
+    """KPIs del modelo desde la vista v_kpi_modelo."""
     try:
-        if hasattr(app.state, 'db'):
-            metrics = await app.state.db.get_model_metrics()
-            return {
-                "status": "success",
-                "metrics": metrics,
-                "timestamp": datetime.utcnow().isoformat()
-            }
-        else:
-            raise HTTPException(
-                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                detail="Database not connected"
-            )
+        db: DataRepository = app.state.db
+        kpi = db.get_model_kpis()
+        return {
+            "status": "success",
+            "metrics": kpi,
+            "timestamp": datetime.utcnow().isoformat()
+        }
     except Exception as e:
-        logger.error(f"Failed to retrieve model metrics: {str(e)}")
+        logger.exception("Failed to retrieve model metrics")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=str(e)
         )
 
-@app.get("/api/metrics/kpis")
-async def get_kpis():
-    """Get key performance indicators"""
-    try:
-        if hasattr(app.state, 'db'):
-            kpis = await app.state.db.get_kpis()
-            return {
-                "status": "success",
-                "kpis": kpis,
-                "timestamp": datetime.utcnow().isoformat()
-            }
-        else:
-            raise HTTPException(
-                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                detail="Database not connected"
-            )
-    except Exception as e:
-        logger.error(f"Failed to retrieve KPIs: {str(e)}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=str(e)
-        )
-
+# -----------------------------------------------------------------------------
 # Error handlers
+# -----------------------------------------------------------------------------
 @app.exception_handler(404)
-async def not_found_handler(request, exc):
+def not_found_handler(request, exc):
     return JSONResponse(
         status_code=404,
         content={
@@ -350,7 +335,7 @@ async def not_found_handler(request, exc):
     )
 
 @app.exception_handler(500)
-async def internal_error_handler(request, exc):
+def internal_error_handler(request, exc):
     logger.error(f"Internal server error: {exc}")
     return JSONResponse(
         status_code=500,
@@ -360,6 +345,9 @@ async def internal_error_handler(request, exc):
         }
     )
 
+# -----------------------------------------------------------------------------
+# Dev runner
+# -----------------------------------------------------------------------------
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(
