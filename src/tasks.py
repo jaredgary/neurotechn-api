@@ -2,7 +2,7 @@
 Celery tasks for background processing (MVP-aligned)
 - Usa DataRepository (sin métodos async)
 - Usa PharmaceuticalForecastModel.train_and_forecast_all
-- Genera/gestiona alertas con las tablas/vistas reales del esquema
+- Genera/gestiona alertas usando tablas/vistas reales del esquema
 """
 
 from __future__ import annotations
@@ -21,7 +21,7 @@ logger = get_task_logger(__name__)
 
 
 # ---------------------------------------------------------------------------
-# Helper: create stock break alerts based on current inventory vs future demand
+# Helpers de negocio para alertas
 # ---------------------------------------------------------------------------
 def _evaluate_stock_risk(db: DataRepository) -> int:
     """
@@ -32,14 +32,13 @@ def _evaluate_stock_risk(db: DataRepository) -> int:
       - BAJA  si stock < yhat_28d
     Retorna: número de alertas creadas.
     """
-    inv_df = db.get_current_inventory()  # sku, fecha, unidades_stock, stock_seguridad
-    dem_df = db.get_future_demand_agg()  # sku, yhat_7d, yhat_14d, yhat_28d
+    inv_df = db.get_current_inventory()        # sku, fecha, unidades_stock, stock_seguridad
+    dem_df = db.get_future_demand_agg()        # sku, yhat_7d, yhat_14d, yhat_28d
 
     if inv_df.empty or dem_df.empty:
         logger.info("No inventory or demand data to evaluate stock risk.")
         return 0
 
-    # Normalizar columnas
     inv_df = inv_df[['sku', 'unidades_stock', 'stock_seguridad']].copy()
     if 'stock_seguridad' not in inv_df:
         inv_df['stock_seguridad'] = 0
@@ -66,7 +65,7 @@ def _evaluate_stock_risk(db: DataRepository) -> int:
         if not severity:
             continue
 
-        # evitar duplicados: si ya existe alerta activa de QUIEBRE_STOCK para el sku con misma severidad
+        # evitar duplicados activos para el mismo SKU/tipo/severidad
         existing = db.get_active_alerts(sku=sku, tipo_alerta="QUIEBRE_STOCK", severidad=severity)
         if not existing.empty:
             continue
@@ -80,7 +79,7 @@ def _evaluate_stock_risk(db: DataRepository) -> int:
             tipo_alerta="QUIEBRE_STOCK",
             severidad=severity,
             descripcion=descripcion,
-            fecha_objetivo=date.today()  # referencia temporal
+            fecha_objetivo=date.today()
         )
         if ok:
             created += 1
@@ -88,9 +87,6 @@ def _evaluate_stock_risk(db: DataRepository) -> int:
     return created
 
 
-# ---------------------------------------------------------------------------
-# Helper: create expiry alerts for near-expiring lots
-# ---------------------------------------------------------------------------
 def _evaluate_expiration_risk(db: DataRepository, days_ahead: int = 30) -> int:
     """
     Crea alertas de tipo VENCIMIENTO para lotes que caducan en <= days_ahead.
@@ -106,7 +102,7 @@ def _evaluate_expiration_risk(db: DataRepository, days_ahead: int = 30) -> int:
         return 0
 
     created = 0
-    # Tomamos por SKU el lote más próximo a caducar
+    # Por SKU, tomamos el lote más próximo a caducar
     lotes = lotes.sort_values(['sku', 'fecha_caducidad'])
     first_per_sku = lotes.groupby('sku').head(1)
 
@@ -123,7 +119,6 @@ def _evaluate_expiration_risk(db: DataRepository, days_ahead: int = 30) -> int:
         lote_id = r.get('lote_id')
         descripcion = f"Lote próximo a vencer en {dias} días (sev={sev}). Lote={lote_id}."
 
-        # evitar duplicados activos por el mismo sku (y severidad)
         existing = db.get_active_alerts(sku=sku, tipo_alerta="VENCIMIENTO", severidad=sev)
         if not existing.empty:
             continue
@@ -145,18 +140,17 @@ def _evaluate_expiration_risk(db: DataRepository, days_ahead: int = 30) -> int:
 # ---------------------------------------------------------------------------
 # Celery tasks
 # ---------------------------------------------------------------------------
-
 @shared_task(name="src.tasks.generate_forecast_task")
 def generate_forecast_task() -> Dict[str, Any]:
     """
     Genera pronóstico para todos los SKUs en horizontes 7/14/28 y guarda resultados.
-    (Equivalente a invocar el endpoint /api/forecast 3 veces.)
+    (Equivalente a invocar el endpoint /api/forecast tres veces.)
     """
     try:
         logger.info("Starting forecast generation task")
 
         db = DataRepository()
-        forecaster = PharmaceuticalForecastModel()
+        model = PharmaceuticalForecastModel()
 
         # Ventas base (últimos TRAINING_WINDOW_DAYS)
         sales = db.get_sales_data()
@@ -168,7 +162,7 @@ def generate_forecast_task() -> Dict[str, Any]:
         for horizon in [7, 14, 28]:
             logger.info(f"Training/forecasting for horizon {horizon} days")
 
-            forecasts_df, metrics_df, summary = forecaster.train_and_forecast_all(
+            forecasts_df, metrics_df, summary = model.train_and_forecast_all(
                 sales_df=sales,
                 skus=None,  # todos
                 horizon_days=horizon,
@@ -252,7 +246,7 @@ def check_expiration_alerts_task(days_ahead: int = 30) -> Dict[str, Any]:
 @shared_task(name="src.tasks.update_model_metrics_task")
 def update_model_metrics_task() -> Dict[str, Any]:
     """
-    Devuelve (y opcionalmente registra en logs) los KPIs del último run desde v_kpi_modelo.
+    Devuelve (y registra en logs) los KPIs del último run desde v_kpi_modelo.
     (No recalcula métricas: ya se guardan en metricas_backtesting al guardar cada run.)
     """
     try:
@@ -269,18 +263,19 @@ def update_model_metrics_task() -> Dict[str, Any]:
 @shared_task(name="src.tasks.cleanup_old_data_task")
 def cleanup_old_data_task() -> Dict[str, Any]:
     """
-    Lanza el cleanup semanal definido en la función SQL cleanup_old_runs() (si está instalada).
+    Lanza el cleanup semanal definido en la función SQL cleanup_old_runs() (si está expuesta como RPC).
     Nota: En tu capa de datos ya programaste el cron; esto es utility manual.
     """
     try:
-        logger.info("Triggering cleanup_old_runs() via RPC (if exposed)")
+        logger.info("Triggering cleanup_old_runs() via RPC (if available)")
         db = DataRepository()
         try:
-            # Si la función está expuesta vía PostgREST como RPC
+            # Si la función SQL 'cleanup_old_runs' está en schema public y el service_role tiene permiso,
+            # Supabase la expone como RPC.
             db.db.service_client.rpc("cleanup_old_runs", {}).execute()
             status_msg = "cleanup_old_runs RPC executed"
         except Exception:
-            status_msg = "cleanup_old_runs RPC not available"
+            status_msg = "cleanup_old_runs RPC not available or not exposed"
         return {"status": "success", "message": status_msg, "timestamp": datetime.utcnow().isoformat()}
     except Exception as e:
         logger.exception("Cleanup task failed")
@@ -295,13 +290,13 @@ def retrain_model_task(force: bool = False) -> Dict[str, Any]:
     try:
         logger.info("Starting retrain_model_task (MVP -> forecast 28d)")
         db = DataRepository()
-        forecaster = PharmaceuticalForecastModel()
+        model = PharmaceuticalForecastModel()
 
         sales = db.get_sales_data()
         if sales.empty:
             return {"status": "no-data", "message": "No sales data", "timestamp": datetime.utcnow().isoformat()}
 
-        forecasts_df, metrics_df, summary = forecaster.train_and_forecast_all(
+        forecasts_df, metrics_df, summary = model.train_and_forecast_all(
             sales_df=sales, skus=None, horizon_days=28, save_models=False
         )
 
