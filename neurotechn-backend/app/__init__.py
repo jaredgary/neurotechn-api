@@ -1,0 +1,2 @@
+"""NeuroTecHN backend application package."""
+
