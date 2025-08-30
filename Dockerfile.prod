@@ -1,6 +1,3 @@
-# Production-optimized Multi-stage Dockerfile for Farmacias Siman MVP
-
-# Stage 1: Build stage with all build dependencies
 FROM python:3.11-slim as builder
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
@@ -14,12 +11,30 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     g++ \
     build-essential \
     libpq-dev \
+    curl \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /build
 
-# Copy and install Python dependencies
-COPY requirements.txt .
+# Create requirements.txt from your dependencies
+RUN echo "fastapi[all]==0.104.1" > requirements.txt && \
+    echo "uvicorn[standard]==0.24.0" >> requirements.txt && \
+    echo "gunicorn==21.2.0" >> requirements.txt && \
+    echo "supabase==2.3.0" >> requirements.txt && \
+    echo "pandas==2.1.4" >> requirements.txt && \
+    echo "numpy==1.25.2" >> requirements.txt && \
+    echo "xgboost==2.0.3" >> requirements.txt && \
+    echo "scikit-learn==1.3.2" >> requirements.txt && \
+    echo "loguru==0.7.2" >> requirements.txt && \
+    echo "pydantic-settings==2.1.0" >> requirements.txt && \
+    echo "celery[redis]==5.3.4" >> requirements.txt && \
+    echo "redis==5.0.1" >> requirements.txt && \
+    echo "joblib==1.3.2" >> requirements.txt && \
+    echo "python-multipart==0.0.6" >> requirements.txt && \
+    echo "python-jose[cryptography]==3.3.0" >> requirements.txt && \
+    echo "passlib[bcrypt]==1.7.4" >> requirements.txt
+
+# Install Python dependencies
 RUN python -m venv /opt/venv && \
     . /opt/venv/bin/activate && \
     pip install --upgrade pip setuptools wheel && \
@@ -49,8 +64,9 @@ WORKDIR /app
 # Copy virtual environment from builder
 COPY --from=builder --chown=appuser:appuser /opt/venv /opt/venv
 
-# Copy application code
+# Copy application code with correct structure
 COPY --chown=appuser:appuser src/ ./src/
+COPY --chown=appuser:appuser generate_synthetic_data.py ./
 
 # Create necessary directories
 RUN mkdir -p /app/logs /app/models /app/data && \
@@ -60,7 +76,7 @@ RUN mkdir -p /app/logs /app/models /app/data && \
 USER appuser
 
 # Health check
-HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
     CMD curl -f http://localhost:8000/health || exit 1
 
 # Expose port
@@ -77,4 +93,5 @@ CMD ["gunicorn", "src.main:app", \
      "--timeout", "120", \
      "--graceful-timeout", "30", \
      "--max-requests", "1000", \
-     "--max-requests-jitter", "50"]
+     "--max-requests-jitter", "50", \
+     "--preload"]

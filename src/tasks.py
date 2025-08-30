@@ -1,6 +1,6 @@
 """
 Celery tasks for background processing (MVP-aligned)
-- Usa DataRepository (sin métodos async)
+- Usa DataRepository simplificada
 - Usa PharmaceuticalForecastModel.train_and_forecast_all
 - Genera/gestiona alertas usando tablas/vistas reales del esquema
 """
@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from celery import shared_task
 from celery.utils.log import get_task_logger
-from datetime import datetime, timedelta, date
+from datetime import datetime, timedelta, date, timezone
 from typing import Dict, Any, List, Optional
 
 import pandas as pd
@@ -195,15 +195,15 @@ def generate_forecast_task() -> Dict[str, Any]:
                 "run_id": run_id,
                 "skus_processed": int(summary.get("total_skus", 0)),
                 "avg_mape": summary.get("avg_mape"),
-                "timestamp": datetime.utcnow().isoformat()
+                "timestamp": datetime.now(timezone.utc).isoformat()
             })
 
         logger.info("Forecast generation task completed")
-        return {"status": "success", "results": results, "timestamp": datetime.utcnow().isoformat()}
+        return {"status": "success", "results": results, "timestamp": datetime.now(timezone.utc).isoformat()}
 
     except Exception as e:
         logger.exception("Forecast generation failed")
-        return {"status": "error", "message": str(e), "timestamp": datetime.utcnow().isoformat()}
+        return {"status": "error", "message": str(e), "timestamp": datetime.now(timezone.utc).isoformat()}
 
 
 @shared_task(name="src.tasks.check_stock_alerts_task")
@@ -216,10 +216,10 @@ def check_stock_alerts_task() -> Dict[str, Any]:
         db = DataRepository()
         created = _evaluate_stock_risk(db)
         logger.info(f"Stock alerts created: {created}")
-        return {"status": "success", "alerts_created": int(created), "timestamp": datetime.utcnow().isoformat()}
+        return {"status": "success", "alerts_created": int(created), "timestamp": datetime.now(timezone.utc).isoformat()}
     except Exception as e:
         logger.exception("Stock alerts evaluation failed")
-        return {"status": "error", "message": str(e), "timestamp": datetime.utcnow().isoformat()}
+        return {"status": "error", "message": str(e), "timestamp": datetime.now(timezone.utc).isoformat()}
 
 
 @shared_task(name="src.tasks.check_expiration_alerts_task")
@@ -235,12 +235,12 @@ def check_expiration_alerts_task(days_ahead: int = 30) -> Dict[str, Any]:
         return {
             "status": "success",
             "alerts_created": int(created),
-            "checked_until": (datetime.utcnow() + timedelta(days=days_ahead)).isoformat(),
-            "timestamp": datetime.utcnow().isoformat()
+            "checked_until": (datetime.now(timezone.utc) + timedelta(days=days_ahead)).isoformat(),
+            "timestamp": datetime.now(timezone.utc).isoformat()
         }
     except Exception as e:
         logger.exception("Expiration alerts evaluation failed")
-        return {"status": "error", "message": str(e), "timestamp": datetime.utcnow().isoformat()}
+        return {"status": "error", "message": str(e), "timestamp": datetime.now(timezone.utc).isoformat()}
 
 
 @shared_task(name="src.tasks.update_model_metrics_task")
@@ -254,10 +254,10 @@ def update_model_metrics_task() -> Dict[str, Any]:
         db = DataRepository()
         kpis = db.get_model_kpis()  # dict con mape_prom, mae_prom, sesgo_prom
         logger.info(f"KPIs: {kpis}")
-        return {"status": "success", "metrics": kpis, "timestamp": datetime.utcnow().isoformat()}
+        return {"status": "success", "metrics": kpis, "timestamp": datetime.now(timezone.utc).isoformat()}
     except Exception as e:
         logger.exception("Model metrics retrieval failed")
-        return {"status": "error", "message": str(e), "timestamp": datetime.utcnow().isoformat()}
+        return {"status": "error", "message": str(e), "timestamp": datetime.now(timezone.utc).isoformat()}
 
 
 @shared_task(name="src.tasks.cleanup_old_data_task")
@@ -270,16 +270,15 @@ def cleanup_old_data_task() -> Dict[str, Any]:
         logger.info("Triggering cleanup_old_runs() via RPC (if available)")
         db = DataRepository()
         try:
-            # Si la función SQL 'cleanup_old_runs' está en schema public y el service_role tiene permiso,
-            # Supabase la expone como RPC.
-            db.db.service_client.rpc("cleanup_old_runs", {}).execute()
+            # CORRECCIÓN: Usar directamente db.client en lugar de db.db.service_client
+            db.client.rpc("cleanup_old_runs", {}).execute()
             status_msg = "cleanup_old_runs RPC executed"
         except Exception:
             status_msg = "cleanup_old_runs RPC not available or not exposed"
-        return {"status": "success", "message": status_msg, "timestamp": datetime.utcnow().isoformat()}
+        return {"status": "success", "message": status_msg, "timestamp": datetime.now(timezone.utc).isoformat()}
     except Exception as e:
         logger.exception("Cleanup task failed")
-        return {"status": "error", "message": str(e), "timestamp": datetime.utcnow().isoformat()}
+        return {"status": "error", "message": str(e), "timestamp": datetime.now(timezone.utc).isoformat()}
 
 
 @shared_task(name="src.tasks.retrain_model_task")
@@ -294,7 +293,7 @@ def retrain_model_task(force: bool = False) -> Dict[str, Any]:
 
         sales = db.get_sales_data()
         if sales.empty:
-            return {"status": "no-data", "message": "No sales data", "timestamp": datetime.utcnow().isoformat()}
+            return {"status": "no-data", "message": "No sales data", "timestamp": datetime.now(timezone.utc).isoformat()}
 
         forecasts_df, metrics_df, summary = model.train_and_forecast_all(
             sales_df=sales, skus=None, horizon_days=28, save_models=False
@@ -327,9 +326,9 @@ def retrain_model_task(force: bool = False) -> Dict[str, Any]:
             "horizon": 28,
             "skus_processed": int(summary.get("total_skus", 0)),
             "avg_mape": summary.get("avg_mape"),
-            "timestamp": datetime.utcnow().isoformat()
+            "timestamp": datetime.now(timezone.utc).isoformat()
         }
 
     except Exception as e:
         logger.exception("Retrain task failed")
-        return {"status": "error", "message": str(e), "timestamp": datetime.utcnow().isoformat()}
+        return {"status": "error", "message": str(e), "timestamp": datetime.now(timezone.utc).isoformat()}

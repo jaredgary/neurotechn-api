@@ -1,83 +1,64 @@
 """
-Conexión y operaciones con Supabase (MVP alineado al esquema actual)
+Conexión y operaciones con Supabase (MVP simplificado)
 """
 from typing import Optional, List, Dict, Any
 from datetime import datetime, timedelta, date
 import pandas as pd
 from supabase import create_client, Client
+from supabase.lib.client_options import ClientOptions
 from loguru import logger
 import numpy as np
 
 from src.config import get_settings
 
 
-class SupabaseConnection:
-    """Gestor de conexión con Supabase"""
+class DataRepository:
+    """Repositorio de datos para operaciones CRUD con Supabase."""
 
     def __init__(self):
-        self.settings = get_settings()
-        self._client: Optional[Client] = None
-        self._service_client: Optional[Client] = None
-
-    @property
-    def client(self) -> Client:
-        """Cliente con key anónima para operaciones de lectura"""
-        if not self._client:
-            self._client = create_client(
-                self.settings.SUPABASE_URL,
-                self.settings.SUPABASE_KEY
+        settings = get_settings()
+        try:
+            # Un solo cliente con service key para todas las operaciones
+            self.client: Client = create_client(
+                settings.SUPABASE_URL,
+                settings.SUPABASE_SERVICE_KEY,
+                options=ClientOptions(
+                    auto_refresh_token=False, 
+                    persist_session=False
+                )
             )
-        return self._client
-
-    @property
-    def service_client(self) -> Client:
-        """
-        Cliente con service key para operaciones de escritura (bypass RLS).
-        ¡No exponer esta key en el frontend!
-        """
-        if not self._service_client and self.settings.SUPABASE_SERVICE_KEY:
-            self._service_client = create_client(
-                self.settings.SUPABASE_URL,
-                self.settings.SUPABASE_SERVICE_KEY
-            )
-        return self._service_client or self.client
+            self.settings = settings
+            logger.info("DB (service) initialized.")
+        except Exception as e:
+            logger.error(f"DB init failed: {e}")
+            raise
 
     def test_connection(self) -> bool:
-        """Smoke test de conexión"""
+        """Prueba de conexión a la base de datos."""
         try:
-            _ = self.client.table('sku_atc').select('sku').limit(1).execute()
+            self.client.table('sku_atc').select('sku').limit(1).execute()
             logger.info("Database connection successful")
             return True
         except Exception as e:
-            logger.error(f"Database connection failed: {e}")
+            logger.error(f"Database connection test failed: {e}")
             return False
-
-
-class DataRepository:
-    """Repositorio de datos para operaciones CRUD"""
-
-    def __init__(self):
-        self.db = SupabaseConnection()
-        self.settings = get_settings()
 
     # ============= SKU Operations =============
 
     def get_active_skus(self) -> pd.DataFrame:
-        """
-        Obtener SKUs (no existen columnas 'activo' o 'es_esencial' en el esquema actual).
-        """
+        """Obtener SKUs activos."""
         try:
-            result = self.db.client.table('sku_atc').select('*').execute()
+            result = self.client.table('sku_atc').select('*').execute()
             return pd.DataFrame(result.data) if result.data else pd.DataFrame()
         except Exception as e:
             logger.error(f"Error fetching SKUs: {e}")
             return pd.DataFrame()
 
     def get_sku_by_atc(self, atc_code: str) -> pd.DataFrame:
-        """Obtener SKUs por prefijo de código ATC"""
+        """Obtener SKUs por prefijo de código ATC."""
         try:
             result = (
-                self.db.client.table('sku_atc')
+                self.client.table('sku_atc')
                 .select('*')
                 .like('atc_code', f'{atc_code}%')
                 .execute()
@@ -96,14 +77,14 @@ class DataRepository:
         end_date: Optional[date] = None,
         limit: Optional[int] = None
     ) -> pd.DataFrame:
-        """Obtener datos de ventas (por defecto últimos N días de TRAINING_WINDOW_DAYS)"""
+        """Obtener datos de ventas."""
         try:
             if not end_date:
                 end_date = date.today()
             if not start_date:
                 start_date = end_date - timedelta(days=self.settings.TRAINING_WINDOW_DAYS)
 
-            query = self.db.client.table('ventas_diarias').select('*')
+            query = self.client.table('ventas_diarias').select('*')
 
             if sku:
                 query = query.eq('sku', sku)
@@ -134,7 +115,7 @@ class DataRepository:
         start_date: Optional[date] = None,
         end_date: Optional[date] = None
     ) -> pd.DataFrame:
-        """Obtener ventas agregadas (métricas básicas; no hay 'monto_total' en el esquema actual)"""
+        """Obtener ventas agregadas."""
         df = self.get_sales_data(start_date=start_date, end_date=end_date)
         if df.empty:
             return df
@@ -144,7 +125,6 @@ class DataRepository:
                 'unidades_vendidas': ['sum', 'mean', 'std'],
                 'promo_flag': 'mean'
             }).round(3)
-            # aplanar columnas MultiIndex
             out.columns = ['_'.join(c).strip() for c in out.columns.values]
             return out.reset_index()
         elif group_by == 'date':
@@ -158,21 +138,10 @@ class DataRepository:
     # ============= Inventory Operations =============
 
     def get_current_inventory(self, sku: Optional[str] = None) -> pd.DataFrame:
-        """
-        Obtener inventario "actual": último registro por SKU en los últimos 7 días.
-        (No existe RPC get_current_inventory; usamos fallback directo a la tabla.)
-        """
-        try:
-            return self._get_inventory_fallback(sku)
-        except Exception as e:
-            logger.error(f"Error fetching inventory: {e}")
-            return pd.DataFrame()
-
-    def _get_inventory_fallback(self, sku: Optional[str] = None) -> pd.DataFrame:
-        """Fallback directo sobre inventario_diario"""
+        """Obtener inventario actual."""
         try:
             query = (
-                self.db.client.table('inventario_diario')
+                self.client.table('inventario_diario')
                 .select('*')
                 .gte('fecha', (date.today() - timedelta(days=7)).isoformat())
             )
@@ -183,12 +152,11 @@ class DataRepository:
             if result.data:
                 df = pd.DataFrame(result.data)
                 df['fecha'] = pd.to_datetime(df['fecha'])
-                # último registro por SKU
                 df = df.sort_values('fecha', ascending=False).drop_duplicates(subset=['sku'], keep='first')
                 return df.reset_index(drop=True)
             return pd.DataFrame()
         except Exception as e:
-            logger.error(f"Error in inventory fallback: {e}")
+            logger.error(f"Error fetching inventory: {e}")
             return pd.DataFrame()
 
     # ============= Forecast Operations =============
@@ -200,12 +168,9 @@ class DataRepository:
         horizonte_dias: int,
         ventana_entrenamiento_dias: int,
         parametros: Dict[str, Any],
-        skus_procesados: int = 0  # se registrará en 'notas' (no existe columna)
+        skus_procesados: int = 0
     ) -> str:
-        """
-        Guardar ejecución de modelo en ejecuciones_modelo.
-        (Esquema actual: modelo, version, horizonte_dias, ventana_entrenamiento_dias, parametros, notas)
-        """
+        """Guardar ejecución de modelo."""
         try:
             data = {
                 'modelo': modelo,
@@ -215,7 +180,7 @@ class DataRepository:
                 'parametros': parametros,
                 'notas': f"skus_procesados={skus_procesados}"
             }
-            result = self.db.service_client.table('ejecuciones_modelo').insert(data).execute()
+            result = self.client.table('ejecuciones_modelo').insert(data).execute()
             if result.data:
                 run_id = result.data[0]['run_id']
                 logger.info(f"Forecast run created: {run_id}")
@@ -233,10 +198,7 @@ class DataRepository:
         metricas_globales: Optional[Dict[str, Any]] = None,
         mensaje_error: Optional[str] = None
     ):
-        """
-        Actualizar ejecución: en el esquema actual solo podemos tocar 'notas'.
-        Se construye un mensaje compacto en notas.
-        """
+        """Actualizar ejecución de modelo."""
         try:
             notas_parts = [f"exito={exito}", f"skus_procesados={skus_procesados}"]
             if metricas_globales:
@@ -244,7 +206,7 @@ class DataRepository:
             if mensaje_error:
                 notas_parts.append(f"error={mensaje_error}")
 
-            self.db.service_client.table('ejecuciones_modelo') \
+            self.client.table('ejecuciones_modelo') \
                 .update({'notas': '; '.join(map(str, notas_parts))}) \
                 .eq('run_id', run_id) \
                 .execute()
@@ -253,10 +215,7 @@ class DataRepository:
             logger.error(f"Error updating forecast run: {e}")
 
     def save_forecasts(self, run_id: str, forecasts: pd.DataFrame):
-        """
-        Guardar pronósticos en forecast_historico.
-        Requiere columnas: [sku, fecha_objetivo, unidades_pronosticadas]
-        """
+        """Guardar pronósticos."""
         try:
             if forecasts.empty:
                 return
@@ -278,8 +237,7 @@ class DataRepository:
                 })
 
             if records:
-                # on conflict no es necesario aquí (PK incluye run_id); cada run es nuevo
-                self.db.service_client.table('forecast_historico').insert(records).execute()
+                self.client.table('forecast_historico').upsert(records, on_conflict="run_id, sku, fecha_objetivo").execute()
                 logger.info(f"Saved {len(records)} forecasts for run {run_id}")
 
         except Exception as e:
@@ -287,10 +245,7 @@ class DataRepository:
             raise
 
     def save_metrics(self, run_id: str, metrics: pd.DataFrame):
-        """
-        Guardar métricas de backtesting en metricas_backtesting.
-        Esquema actual: mape, mae, smape, sesgo (no existen rmse/r2/n_observaciones en la tabla).
-        """
+        """Guardar métricas de backtesting."""
         try:
             if metrics.empty:
                 return
@@ -311,7 +266,7 @@ class DataRepository:
                 records.append(rec)
 
             if records:
-                self.db.service_client.table('metricas_backtesting').insert(records).execute()
+                self.client.table('metricas_backtesting').upsert(records, on_conflict="run_id, sku").execute()
                 logger.info(f"Saved metrics for {len(records)} SKUs")
 
         except Exception as e:
@@ -319,11 +274,9 @@ class DataRepository:
             raise
 
     def get_latest_forecast(self, sku: Optional[str] = None) -> pd.DataFrame:
-        """
-        Obtener pronósticos del último run (vista v_forecast_latest).
-        """
+        """Obtener pronósticos del último run."""
         try:
-            query = self.db.client.table('v_forecast_latest').select('*')
+            query = self.client.table('v_forecast_latest').select('*')
             if sku:
                 query = query.eq('sku', sku)
             result = query.execute()
@@ -337,11 +290,9 @@ class DataRepository:
             return pd.DataFrame()
 
     def get_future_demand_agg(self) -> pd.DataFrame:
-        """
-        Helper para dashboards: vista v_demanda_futura_7_14_28
-        """
+        """Obtener demanda futura agregada."""
         try:
-            result = self.db.client.table('v_demanda_futura_7_14_28').select('*').execute()
+            result = self.client.table('v_demanda_futura_7_14_28').select('*').execute()
             return pd.DataFrame(result.data) if result.data else pd.DataFrame()
         except Exception as e:
             logger.error(f"Error fetching future demand agg: {e}")
@@ -358,9 +309,7 @@ class DataRepository:
         fecha_objetivo: Optional[date] = None,
         lote_id: Optional[str] = None,
     ) -> bool:
-        """
-        Crear alerta (esquema actual: sku, tipo_alerta, severidad, fecha_objetivo, lote_id, descripcion, resuelta)
-        """
+        """Crear alerta."""
         try:
             data = {
                 'sku': sku,
@@ -373,7 +322,7 @@ class DataRepository:
             if lote_id:
                 data['lote_id'] = lote_id
 
-            result = self.db.service_client.table('alertas').insert(data).execute()
+            result = self.client.table('alertas').insert(data).execute()
             if result.data:
                 logger.info(f"Alert created for SKU {sku}: {tipo_alerta}")
                 return True
@@ -388,13 +337,10 @@ class DataRepository:
         tipo_alerta: Optional[str] = None,
         severidad: Optional[str] = None
     ) -> pd.DataFrame:
-        """
-        Obtener alertas activas (resuelta = false).
-        Se puede expandir nombre de producto vía relación: sku_atc(nombre_producto)
-        """
+        """Obtener alertas activas."""
         try:
             query = (
-                self.db.client.table('alertas')
+                self.client.table('alertas')
                 .select('*, sku_atc(nombre_producto)')
                 .eq('resuelta', False)
             )
@@ -411,34 +357,29 @@ class DataRepository:
             logger.error(f"Error fetching alerts: {e}")
             return pd.DataFrame()
 
-    def acknowledge_alert(
-        self,
-        alert_id: str,
-        comentario: Optional[str] = None  # no se usa en el RPC actual
-    ) -> bool:
-        """
-        Reconocer/resolver una alerta.
-        RPC actual: ack_alert(p_id uuid) -> void
-        """
+    def acknowledge_alert(self, alert_id: str, comentario: Optional[str] = None) -> bool:
         try:
-            self.db.service_client.rpc('ack_alert', {'p_id': alert_id}).execute()
-            logger.info(f"Alert {alert_id} acknowledged")
+            if comentario is not None:
+                self.client.rpc('ack_alert', {'p_id': alert_id, 'p_comment': comentario}).execute()
+            else:
+                self.client.rpc('ack_alert', {'p_id': alert_id}).execute()
             return True
-        except Exception as e:
-            logger.error(f"Error acknowledging alert: {e}")
-            return False
+        except Exception:
+            try:
+                self.client.rpc('ack_alert', {'p_id': alert_id}).execute()
+                return True
+            except Exception as e2:
+                logger.error(f"ack_alert failed: {e2}")
+                return False
 
     # ============= Batch Expiry Operations =============
 
     def get_expiring_batches(self, days_ahead: int = 30) -> pd.DataFrame:
-        """
-        Lotes que caducan en <= days_ahead.
-        (No existen columnas 'costo_unitario' ni 'es_esencial' en sku_atc)
-        """
+        """Obtener lotes que caducan próximamente."""
         try:
             target_date = (date.today() + timedelta(days=days_ahead)).isoformat()
             result = (
-                self.db.client.table('lotes_caducidad')
+                self.client.table('lotes_caducidad')
                 .select('*, sku_atc(nombre_producto)')
                 .lte('fecha_caducidad', target_date)
                 .gt('unidades', 0)
@@ -458,14 +399,11 @@ class DataRepository:
     # ============= Dashboard Data Operations =============
 
     def get_model_kpis(self) -> Dict[str, Any]:
-        """
-        KPIs del modelo: vista v_kpi_modelo (run_id, ts_ejecucion, mape_prom, mae_prom, sesgo_prom)
-        """
+        """Obtener KPIs del modelo."""
         try:
-            result = self.db.client.table('v_kpi_modelo').select('*').execute()
+            result = self.client.table('v_kpi_modelo').select('*').execute()
             if result.data and len(result.data) > 0:
                 row = result.data[0]
-                # convertir Decimals a float si aplica
                 out = dict(row)
                 for k in ('mape_prom', 'mae_prom', 'sesgo_prom'):
                     if k in out and out[k] is not None:
@@ -476,24 +414,22 @@ class DataRepository:
             logger.error(f"Error fetching model KPIs: {e}")
             return {}
 
-    # (Las siguientes eran vistas/RPC no existentes en el esquema actual; devolvemos vacío.)
-
     def get_executive_summary(self) -> Dict[str, Any]:
-        """No hay vista/RPC definidos en el MVP actual: devolver vacío."""
+        """Resumen ejecutivo (placeholder)."""
         return {}
 
     def get_inventory_status(self) -> pd.DataFrame:
-        """No hay vista v_estado_inventario en el MVP actual: devolver vacío."""
+        """Estado de inventario (placeholder)."""
         return pd.DataFrame()
 
     def get_abc_analysis(self) -> pd.DataFrame:
-        """No hay vista v_analisis_abc en el MVP actual: devolver vacío."""
+        """Análisis ABC (placeholder)."""
         return pd.DataFrame()
 
     # ============= Utility Methods =============
 
     def check_data_quality(self, sku: str) -> Dict[str, Any]:
-        """Verificar calidad de datos para un SKU (completitud, outliers simples)"""
+        """Verificar calidad de datos para un SKU."""
         try:
             sales_df = self.get_sales_data(sku=sku)
             if sales_df.empty:
@@ -507,7 +443,6 @@ class DataRepository:
             actual_days = len(sales_df)
             completeness = actual_days / total_days if total_days > 0 else 0
 
-            # outliers por IQR
             Q1 = sales_df['unidades_vendidas'].quantile(0.25)
             Q3 = sales_df['unidades_vendidas'].quantile(0.75)
             IQR = Q3 - Q1
@@ -549,16 +484,13 @@ class DataRepository:
         start_date: Optional[date] = None,
         end_date: Optional[date] = None
     ) -> pd.DataFrame:
-        """
-        Comparar pronósticos vs ventas reales (sin intervalos, ya que no están en el esquema)
-        """
+        """Comparar pronósticos vs ventas reales."""
         try:
             if not end_date:
                 end_date = date.today()
             if not start_date:
                 start_date = end_date - timedelta(days=30)
 
-            # Pronósticos del último run
             forecast_df = self.get_latest_forecast(sku=sku)
             if forecast_df.empty:
                 return pd.DataFrame()
@@ -568,14 +500,12 @@ class DataRepository:
                 (forecast_df['fecha_objetivo'] <= pd.Timestamp(end_date))
             ][['fecha_objetivo', 'unidades_pronosticadas']].copy()
 
-            # Ventas reales
             sales_df = self.get_sales_data(
                 sku=sku,
                 start_date=start_date,
                 end_date=end_date
             )
             if sales_df.empty:
-                # devolvemos solo pronóstico si no hay ventas
                 comparison_df = forecast_df.rename(columns={'fecha_objetivo': 'fecha'})
                 comparison_df['unidades_vendidas'] = np.nan
                 comparison_df['error'] = np.nan
@@ -592,7 +522,6 @@ class DataRepository:
 
             comparison_df.rename(columns={'fecha_objetivo': 'fecha'}, inplace=True)
             comparison_df['error'] = comparison_df['unidades_vendidas'] - comparison_df['unidades_pronosticadas']
-            # evitar división por cero/NaN
             denom = comparison_df['unidades_vendidas'].replace({0: np.nan})
             comparison_df['error_pct'] = (comparison_df['error'] / denom) * 100.0
 
