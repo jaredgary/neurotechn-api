@@ -1,77 +1,45 @@
+# Production-optimized Multi-stage Dockerfile (Simplified)
+
+# Stage 1: Build stage with dependencies
 FROM python:3.11-slim as builder
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
-    PYTHONUNBUFFERED=1 \
-    PIP_NO_CACHE_DIR=1 \
-    PIP_DISABLE_PIP_VERSION_CHECK=1
+    PYTHONUNBUFFERED=1
 
-# Install build dependencies
+WORKDIR /app
+
+# Install system dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    gcc \
-    g++ \
     build-essential \
     libpq-dev \
     curl \
     && rm -rf /var/lib/apt/lists/*
 
-WORKDIR /build
-
+# Copy requirements and install packages directly
 COPY requirements.txt .
-RUN python -m venv /opt/venv && \
-    . /opt/venv/bin/activate && \
-    pip install --upgrade pip setuptools wheel && \
-    pip install -r requirements.txt
+RUN pip install --no-cache-dir --upgrade pip
+RUN pip install --no-cache-dir --prefix="/install" -r requirements.txt
 
-# Stage 2: Runtime stage with minimal footprint
+
+# Stage 2: Final runtime stage
 FROM python:3.11-slim as runtime
-
-ENV PYTHONDONTWRITEBYTECODE=1 \
-    PYTHONUNBUFFERED=1 \
-    PYTHONPATH=/app \
-    PATH="/opt/venv/bin:$PATH"
-
-# Install only runtime dependencies
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    libpq5 \
-    curl \
-    && rm -rf /var/lib/apt/lists/* \
-    && apt-get clean
-
-# Create non-root user
-RUN groupadd -r appuser && \
-    useradd -r -g appuser -d /app -s /sbin/nologin appuser
 
 WORKDIR /app
 
-# Copy virtual environment from builder
-COPY --from=builder --chown=appuser:appuser /opt/venv /opt/venv
+# Create a non-root user
+RUN groupadd -r appuser && useradd -r -g appuser appuser
 
-# Copy application code with correct structure
+# Copy installed packages from the builder stage
+COPY --from=builder /install /usr/local
+# Copy your application code
 COPY --chown=appuser:appuser src/ ./src/
+COPY --chown=appuser:appuser celery_app.py ./
 
-# Create necessary directories
-RUN mkdir -p /app/logs /app/models /app/data && \
-    chown -R appuser:appuser /app
-
-# Security: Run as non-root user
 USER appuser
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
     CMD curl -f http://localhost:8000/health || exit 1
 
-# Expose port
 EXPOSE 8000
-
-# Use gunicorn for production with uvicorn workers
-CMD ["gunicorn", "src.main:app", \
-     "-w", "4", \
-     "-k", "uvicorn.workers.UvicornWorker", \
-     "--bind", "0.0.0.0:8000", \
-     "--access-logfile", "-", \
-     "--error-logfile", "-", \
-     "--log-level", "info", \
-     "--timeout", "120", \
-     "--graceful-timeout", "30", \
-     "--max-requests", "1000", \
-     "--max-requests-jitter", "50"]
+# CMD is no longer needed here, as we will use the fly.toml processes
