@@ -363,8 +363,8 @@ def get_model_metrics():
     """KPIs del modelo (vista v_kpi_modelo)."""
     try:
         db: DataRepository = app.state.db
-        df = db.get_model_kpis()
-        return df.to_dict(orient="records")
+        kpis = db.get_model_kpis()  
+        return kpis
     except Exception as e:
         logger.exception("Failed to retrieve model metrics")
         raise HTTPException(status_code=500, detail=str(e))
