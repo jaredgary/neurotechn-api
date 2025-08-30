@@ -48,7 +48,6 @@ COPY --from=builder --chown=appuser:appuser /opt/venv /opt/venv
 
 # Copy application code with correct structure
 COPY --chown=appuser:appuser src/ ./src/
-COPY --chown=appuser:appuser generate_synthetic_data.py ./
 
 # Create necessary directories
 RUN mkdir -p /app/logs /app/models /app/data && \
