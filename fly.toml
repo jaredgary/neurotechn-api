@@ -24,4 +24,4 @@ primary_region = 'mia'
 
 [processes]
   app = "/opt/venv/bin/gunicorn -w 4 -k uvicorn.workers.UvicornWorker src.main:app"
-  worker = "celery -A src.celery_app worker --loglevel=info -Q forecast,alerts,maintenance"
+  worker = "/opt/venv/bin/celery -A src.celery_app worker --loglevel=info -Q forecast,alerts,maintenance"
