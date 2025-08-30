@@ -1,131 +1,46 @@
+# docker-compose.yml
 version: '3.8'
 
 services:
-  # Main FastAPI application
-  app:
-    build:
-      context: .
-      dockerfile: Dockerfile
-      target: runtime
-    container_name: farmacias-siman-api
+  api:
+    build: .
     ports:
       - "8000:8000"
     environment:
-      - ENVIRONMENT=development
-      - LOG_LEVEL=INFO
       - SUPABASE_URL=${SUPABASE_URL}
       - SUPABASE_KEY=${SUPABASE_KEY}
-      - DATABASE_URL=${DATABASE_URL}
-    env_file:
-      - .env
+      - SUPABASE_SERVICE_KEY=${SUPABASE_SERVICE_KEY}
+      - CRON_SECRET=${CRON_SECRET}
+      - SECRET_KEY=${SECRET_KEY}
     volumes:
       - ./logs:/app/logs
       - ./models:/app/models
-      - ./data:/app/data
-    restart: unless-stopped
-    networks:
-      - farmacias-network
     depends_on:
       - redis
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 40s
 
-  # Redis for caching and Celery backend
   redis:
     image: redis:7-alpine
-    container_name: farmacias-redis
     ports:
       - "6379:6379"
-    volumes:
-      - redis_data:/data
-    command: redis-server --appendonly yes
-    restart: unless-stopped
-    networks:
-      - farmacias-network
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
 
-  # Celery worker for background tasks
-  celery:
-    build:
-      context: .
-      dockerfile: Dockerfile
-      target: runtime
-    container_name: farmacias-celery
-    command: celery -A src.celery_app worker --loglevel=info
+  celery-worker:
+    build: .
+    command: celery -A celery_app worker --loglevel=info
     environment:
-      - ENVIRONMENT=development
-      - CELERY_BROKER_URL=redis://redis:6379/0
-      - CELERY_RESULT_BACKEND=redis://redis:6379/0
       - SUPABASE_URL=${SUPABASE_URL}
       - SUPABASE_KEY=${SUPABASE_KEY}
-    env_file:
-      - .env
-    volumes:
-      - ./logs:/app/logs
-      - ./models:/app/models
-      - ./data:/app/data
+      - SUPABASE_SERVICE_KEY=${SUPABASE_SERVICE_KEY}
+      - CELERY_BROKER_URL=redis://redis:6379/0
     depends_on:
       - redis
-    restart: unless-stopped
-    networks:
-      - farmacias-network
 
-  # Celery beat for scheduled tasks
   celery-beat:
-    build:
-      context: .
-      dockerfile: Dockerfile
-      target: runtime
-    container_name: farmacias-celery-beat
-    command: celery -A src.celery_app beat --loglevel=info
+    build: .
+    command: celery -A celery_app beat --loglevel=info
     environment:
-      - ENVIRONMENT=development
-      - CELERY_BROKER_URL=redis://redis:6379/0
-      - CELERY_RESULT_BACKEND=redis://redis:6379/0
       - SUPABASE_URL=${SUPABASE_URL}
       - SUPABASE_KEY=${SUPABASE_KEY}
-    env_file:
-      - .env
-    volumes:
-      - ./logs:/app/logs
-    depends_on:
-      - redis
-    restart: unless-stopped
-    networks:
-      - farmacias-network
-
-  # Flower for Celery monitoring (optional, for development)
-  flower:
-    build:
-      context: .
-      dockerfile: Dockerfile
-      target: runtime
-    container_name: farmacias-flower
-    command: celery -A src.celery_app flower --port=5555
-    ports:
-      - "5555:5555"
-    environment:
+      - SUPABASE_SERVICE_KEY=${SUPABASE_SERVICE_KEY}
       - CELERY_BROKER_URL=redis://redis:6379/0
-      - CELERY_RESULT_BACKEND=redis://redis:6379/0
     depends_on:
       - redis
-      - celery
-    restart: unless-stopped
-    networks:
-      - farmacias-network
-
-networks:
-  farmacias-network:
-    driver: bridge
-
-volumes:
-  redis_data:
-    driver: local

@@ -2,6 +2,7 @@
 Configuración central del sistema MVP Farmacias Siman
 """
 from pydantic_settings import BaseSettings
+from pydantic import ConfigDict
 from typing import Optional, List
 from functools import lru_cache
 import os
@@ -9,6 +10,13 @@ import os
 
 class Settings(BaseSettings):
     """Configuración del sistema usando variables de entorno"""
+    
+    model_config = ConfigDict(
+        env_file=".env",
+        env_file_encoding="utf-8",
+        case_sensitive=True,
+        extra="ignore"  # Permitir campos extra en .env
+    )
     
     # Supabase Configuration
     SUPABASE_URL: str
@@ -26,7 +34,7 @@ class Settings(BaseSettings):
     # Model Configuration
     MODEL_VERSION: str = "1.0.0"
     MODEL_NAME: str = "xgboost"
-    FORECAST_HORIZONS: List[int] = [7, 14, 28]
+    FORECAST_HORIZONS: str = "7,14,28"
     TRAINING_WINDOW_DAYS: int = 90
     MIN_TRAINING_SAMPLES: int = 30
     
@@ -82,11 +90,6 @@ class Settings(BaseSettings):
     ESSENTIAL_MEDICINE_MULTIPLIER: float = 1.5  # Priority multiplier for essential meds
     MAX_LEAD_TIME_DAYS: int = 30
     DEFAULT_SAFETY_STOCK_DAYS: int = 7
-    
-    class Config:
-        env_file = ".env"
-        env_file_encoding = "utf-8"
-        case_sensitive = True
 
 
 @lru_cache()
@@ -95,20 +98,29 @@ def get_settings() -> Settings:
     return Settings()
 
 
-# Model hyperparameter configurations
-XGBOOST_PARAMS = {
-    "objective": "reg:squarederror",
-    "n_estimators": get_settings().XGBOOST_N_ESTIMATORS,
-    "max_depth": get_settings().XGBOOST_MAX_DEPTH,
-    "learning_rate": get_settings().XGBOOST_LEARNING_RATE,
-    "subsample": get_settings().XGBOOST_SUBSAMPLE,
-    "colsample_bytree": get_settings().XGBOOST_COLSAMPLE_BYTREE,
-    "random_state": get_settings().XGBOOST_RANDOM_STATE,
-    "n_jobs": -1,
-    "verbosity": 0
-}
+def get_forecast_horizons() -> List[int]:
+    """Parse forecast horizons from comma-separated string"""
+    horizons_str = get_settings().FORECAST_HORIZONS
+    return [int(h.strip()) for h in horizons_str.split(",")]
 
-# Feature engineering configurations
+
+def get_xgboost_params() -> dict:
+    """Get XGBoost parameters from settings"""
+    settings = get_settings()
+    return {
+        "objective": "reg:squarederror",
+        "n_estimators": settings.XGBOOST_N_ESTIMATORS,
+        "max_depth": settings.XGBOOST_MAX_DEPTH,
+        "learning_rate": settings.XGBOOST_LEARNING_RATE,
+        "subsample": settings.XGBOOST_SUBSAMPLE,
+        "colsample_bytree": settings.XGBOOST_COLSAMPLE_BYTREE,
+        "random_state": settings.XGBOOST_RANDOM_STATE,
+        "n_jobs": -1,
+        "verbosity": 0
+    }
+
+
+# Configuraciones estáticas (no dependen de settings)
 FEATURE_CONFIG = {
     "lag_features": [1, 3, 7, 14, 28],  # Lag days to create
     "rolling_windows": [3, 7, 14, 28],  # Rolling statistics windows
@@ -190,35 +202,43 @@ RATE_LIMIT_CONFIG = {
     "reports": "20/hour"
 }
 
-# Logging configuration
-LOGGING_CONFIG = {
-    "version": 1,
-    "disable_existing_loggers": False,
-    "formatters": {
-        "default": {
-            "format": "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+# Función helper para logging config (evita llamadas circulares)
+def get_logging_config() -> dict:
+    """Get logging configuration"""
+    settings = get_settings()
+    return {
+        "version": 1,
+        "disable_existing_loggers": False,
+        "formatters": {
+            "default": {
+                "format": "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+            },
+            "json": {
+                "format": '{"time": "%(asctime)s", "name": "%(name)s", "level": "%(levelname)s", "message": "%(message)s"}'
+            }
         },
-        "json": {
-            "format": '{"time": "%(asctime)s", "name": "%(name)s", "level": "%(levelname)s", "message": "%(message)s"}'
-        }
-    },
-    "handlers": {
-        "console": {
-            "class": "logging.StreamHandler",
-            "formatter": "json" if get_settings().LOG_FORMAT == "json" else "default",
-            "level": get_settings().LOG_LEVEL
+        "handlers": {
+            "console": {
+                "class": "logging.StreamHandler",
+                "formatter": "json" if settings.LOG_FORMAT == "json" else "default",
+                "level": settings.LOG_LEVEL
+            }
         },
-        "file": {
-            "class": "logging.handlers.RotatingFileHandler",
-            "filename": "logs/app.log",
-            "maxBytes": 10485760,  # 10MB
-            "backupCount": 5,
-            "formatter": "json" if get_settings().LOG_FORMAT == "json" else "default",
-            "level": get_settings().LOG_LEVEL
+        "root": {
+            "level": settings.LOG_LEVEL,
+            "handlers": ["console"]
         }
-    },
-    "root": {
-        "level": get_settings().LOG_LEVEL,
-        "handlers": ["console", "file"]
     }
+
+# Alias para compatibilidad (usar get_xgboost_params() en su lugar)
+XGBOOST_PARAMS = {
+    "objective": "reg:squarederror",
+    "n_estimators": 100,
+    "max_depth": 6,
+    "learning_rate": 0.1,
+    "subsample": 0.8,
+    "colsample_bytree": 0.8,
+    "random_state": 42,
+    "n_jobs": -1,
+    "verbosity": 0
 }

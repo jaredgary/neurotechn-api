@@ -8,7 +8,7 @@ from supabase import create_client, Client
 from loguru import logger
 import numpy as np
 
-from config import get_settings
+from src.config import get_settings
 
 
 class SupabaseConnection:

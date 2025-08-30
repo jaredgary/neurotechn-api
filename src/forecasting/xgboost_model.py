@@ -13,7 +13,7 @@ from loguru import logger
 import warnings
 warnings.filterwarnings('ignore')
 
-from config import get_settings, XGBOOST_PARAMS, FEATURE_CONFIG
+from src.config import get_settings, XGBOOST_PARAMS, FEATURE_CONFIG
 
 
 class PharmaceuticalForecastModel:
