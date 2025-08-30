@@ -6,7 +6,7 @@ FROM python:3.11-slim as builder
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1
 
-WORKDIR /app
+WORKDIR /build
 
 # Install system dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -15,25 +15,38 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy requirements and install packages directly
+# Copy requirements and install packages
 COPY requirements.txt .
-RUN pip install --no-cache-dir --upgrade pip
-RUN pip install --no-cache-dir --prefix="/install" -r requirements.txt
+RUN pip install --no-cache-dir --upgrade pip && \
+    pip install --no-cache-dir -r requirements.txt
 
 
 # Stage 2: Final runtime stage
 FROM python:3.11-slim as runtime
 
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONPATH=/app
+
 WORKDIR /app
+
+# Install runtime dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
 
 # Create a non-root user
 RUN groupadd -r appuser && useradd -r -g appuser appuser
 
 # Copy installed packages from the builder stage
-COPY --from=builder /install /usr/local
-# Copy your application code
+COPY --from=builder /usr/local/lib/python3.11/site-packages /usr/local/lib/python3.11/site-packages
+COPY --from=builder /usr/local/bin /usr/local/bin
+
+# Copy your application code with correct structure
 COPY --chown=appuser:appuser src/ ./src/
-COPY --chown=appuser:appuser celery_app.py ./
+
+# Create necessary directories
+RUN mkdir -p /app/logs /app/models /app/data && \
+    chown -R appuser:appuser /app
 
 USER appuser
 
@@ -42,4 +55,3 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
     CMD curl -f http://localhost:8000/health || exit 1
 
 EXPOSE 8000
-# CMD is no longer needed here, as we will use the fly.toml processes
