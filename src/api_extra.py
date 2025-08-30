@@ -36,12 +36,14 @@ def api_topn_demand(
         if col not in agg.columns:
             raise HTTPException(status_code=400, detail=f"Horizonte no disponible: {col}")
 
-        skus = db.get_active_skus()[["sku", "nombre_producto"]]
+        # después (incluye atc_code y lo expone):
+        skus = db.get_active_skus()[["sku", "nombre_producto", "atc_code"]]
         out = (
             agg.merge(skus, on="sku", how="left")
                .sort_values(col, ascending=False)
-               .head(n)[["sku", "nombre_producto", "yhat_7d", "yhat_14d", "yhat_28d"]]
+               .head(n)[["sku", "nombre_producto", "atc_code", "yhat_7d", "yhat_14d", "yhat_28d"]]
         )
+
         return {"items": _df_records(out)}
     except HTTPException:
         raise
