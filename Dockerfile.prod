@@ -74,5 +74,4 @@ CMD ["gunicorn", "src.main:app", \
      "--timeout", "120", \
      "--graceful-timeout", "30", \
      "--max-requests", "1000", \
-     "--max-requests-jitter", "50", \
-     "--preload"]
+     "--max-requests-jitter", "50"]
