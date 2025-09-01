@@ -340,12 +340,27 @@ def api_recompute_alerts():
 def get_inventory_current(sku: Optional[str] = None):
     """Último inventario por SKU (últimos 7 días)."""
     try:
-        db: DataRepository = app.state.db
-        df = db.get_current_inventory(sku=sku)
-        return df.to_dict(orient="records")
-    except Exception as e:
-        logger.exception("Failed to retrieve inventory")
-        raise HTTPException(status_code=500, detail=str(e))
+        df = db.get_current_inventory()
+        if df.empty:
+            return JSONResponse(content=[], status_code=200)
+
+        # Nos aseguramos de exportar campos clave
+        cols = [
+            "fecha", "sku",
+            "unidades_stock", "stock_seguridad",
+            "nombre_producto", "atc_code", "lead_time_dias"
+        ]
+        for c in cols:
+            if c not in df.columns:
+                df[c] = None
+
+        # Serializar a JSON simple
+        out = df[cols].to_dict(orient="records")
+        return JSONResponse(content=out, status_code=200)
+
+    except Exception:
+        logger.exception("Failed to retrieve current inventory")
+        raise HTTPException(status_code=500, detail="Error retrieving current inventory")
 
 
 @app.get("/api/metrics/model")

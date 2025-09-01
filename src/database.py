@@ -140,27 +140,50 @@ class DataRepository:
 
     # ------------ Inventario ------------
 
-    def get_current_inventory(self, sku: Optional[str] = None) -> pd.DataFrame:
-        """Último inventario por SKU (busca últimos 7 días y deduplica por sku)."""
+    def get_current_inventory(self) -> pd.DataFrame:
+        """
+        Devuelve el inventario 'actual' (último registro por SKU) e incluye metadatos
+        de sku_atc: nombre_producto, atc_code, lead_time_dias.
+        """
         try:
-            q = (
-                self.client.table("inventario_diario")
-                .select("*")
-                .gte("fecha", (date.today() - timedelta(days=7)).isoformat())
+            # Traemos columnas base + relación con sku_atc (FK existente)
+            query = (
+                self.client
+                .table('inventario_diario')
+                .select(
+                    'fecha, sku, unidades_stock, stock_seguridad, '
+                    'sku_atc(nombre_producto, atc_code, lead_time_dias)'
+                )
+                .order('fecha', desc=True)
+                .limit(20000)
             )
-            if sku:
-                q = q.eq("sku", sku)
+            res = query.execute()
+            df = pd.DataFrame(res.data or [])
+            if df.empty:
+                return df
 
-            res = q.order("fecha", desc=True).execute()
-            if not res.data:
-                return pd.DataFrame()
+            # Nos quedamos con el registro más reciente por SKU
+            df['fecha'] = pd.to_datetime(df['fecha'])
+            df = df.sort_values(['sku', 'fecha'], ascending=[True, False])
+            df = df.drop_duplicates(subset='sku', keep='first')
 
-            df = pd.DataFrame(res.data)
-            df["fecha"] = pd.to_datetime(df["fecha"])
-            df = df.sort_values("fecha", ascending=False).drop_duplicates(subset=["sku"], keep="first")
-            return df.reset_index(drop=True)
+            # Aplanar el objeto anidado sku_atc{...}
+            if 'sku_atc' in df.columns:
+                meta = df['sku_atc'].apply(lambda x: x or {})
+                df['nombre_producto'] = meta.apply(lambda m: m.get('nombre_producto'))
+                df['atc_code'] = meta.apply(lambda m: m.get('atc_code'))
+                df['lead_time_dias'] = meta.apply(lambda m: m.get('lead_time_dias'))
+                df = df.drop(columns=['sku_atc'])
+
+            # Valores por defecto seguros
+            for c in ['unidades_stock', 'stock_seguridad', 'lead_time_dias']:
+                if c in df.columns:
+                    df[c] = pd.to_numeric(df[c], errors='coerce').fillna(0).astype(float)
+
+            return df
+
         except Exception as e:
-            logger.error(f"Error obteniendo inventario: {e}")
+            logger.exception("Error getting current inventory")
             return pd.DataFrame()
 
     # ------------ Pronósticos (persistencia) ------------
