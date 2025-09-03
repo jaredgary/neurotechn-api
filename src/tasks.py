@@ -31,7 +31,55 @@ def _evaluate_stock_risk(db: DataRepository) -> int:
     Crea alertas de tipo QUIEBRE_STOCK usando:
       - v_demanda_futura_7_14_28  (yhat_7d, yhat_14d, yhat_28d)
       - v_inventario_latest        (unidades_stock)
+    """
+    try:
+        df = db.get_stock_risk_data()
+        if df.empty:
+            return 0
 
+        alerts_to_create = []
+        today = date.today()
+
+        for _, row in df.iterrows():
+            sku = row["sku"]
+            stock = row["unidades_stock"]
+            yhat_7d = row.get("yhat_7d", 0)
+            yhat_14d = row.get("yhat_14d", 0)
+            yhat_28d = row.get("yhat_28d", 0)
+
+            alert = {
+                "sku": sku,
+                "tipo_alerta": "QUIEBRE_STOCK",
+                "resuelta": False,
+            }
+
+            if stock < yhat_7d:
+                alert["severidad"] = "ALTA"
+                alert["fecha_objetivo"] = (today + timedelta(days=7)).isoformat()
+                alert["descripcion"] = f"Stock actual ({stock}) insuficiente para la demanda pronosticada a 7 días ({yhat_7d:.0f} u)."
+                alerts_to_create.append(alert)
+            elif stock < yhat_14d:
+                alert["severidad"] = "MEDIA"
+                alert["fecha_objetivo"] = (today + timedelta(days=14)).isoformat()
+                alert["descripcion"] = f"Stock actual ({stock}) en riesgo para la demanda a 14 días ({yhat_14d:.0f} u)."
+                alerts_to_create.append(alert)
+            elif stock < yhat_28d:
+                alert["severidad"] = "BAJA"
+                alert["fecha_objetivo"] = (today + timedelta(days=28)).isoformat()
+                alert["descripcion"] = f"Stock ({stock}) podría ser insuficiente para la demanda a 28 días ({yhat_28d:.0f} u)."
+                alerts_to_create.append(alert)
+
+        if alerts_to_create:
+            logger.info(f"Creando {len(alerts_to_create)} alertas de quiebre de stock...")
+            db.create_alerts(alerts_to_create)
+            return len(alerts_to_create)
+
+        return 0
+    except Exception as e:
+        logger.error(f"Error evaluando riesgo de stock: {e}")
+        return 0
+
+    """
     Severidad:
       - ALTA  si stock < yhat_7d
       - MEDIA si stock < yhat_14d

@@ -1,0 +1,605 @@
+{
+	"openapi": "3.1.0",
+	"info": {
+		"title": "Farmacias Siman - Sistema Predictivo de Inventario (MVP)",
+		"description": "API para gestión predictiva de inventario farmacéutico con XGBoost",
+		"version": "1.0.0"
+	},
+	"paths": {
+		"/api/forecast/topn": {
+			"get": {
+				"tags": [
+					"extra"
+				],
+				"summary": "Api Topn Demand",
+				"description": "Top-N por demanda acumulada a h días desde la vista v_demanda_futura_7_14_28.\nDevuelve UNA fila por SKU (sin duplicados diarios).",
+				"operationId": "api_topn_demand_api_forecast_topn_get",
+				"parameters": [
+					{
+						"name": "h",
+						"in": "query",
+						"required": false,
+						"schema": {
+							"type": "integer",
+							"maximum": 28,
+							"minimum": 7,
+							"description": "Horizonte: 7, 14 o 28 días",
+							"default": 28,
+							"title": "H"
+						},
+						"description": "Horizonte: 7, 14 o 28 días"
+					},
+					{
+						"name": "n",
+						"in": "query",
+						"required": false,
+						"schema": {
+							"type": "integer",
+							"maximum": 50,
+							"minimum": 1,
+							"description": "Top-N SKUs",
+							"default": 10,
+							"title": "N"
+						},
+						"description": "Top-N SKUs"
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "Successful Response",
+						"content": {
+							"application/json": {
+								"schema": {}
+							}
+						}
+					},
+					"422": {
+						"description": "Validation Error",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/HTTPValidationError"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/dashboard/summary": {
+			"get": {
+				"tags": [
+					"extra"
+				],
+				"summary": "Api Dashboard Summary",
+				"description": "Resumen mínimo para Dashboard:\n  - KPIs de modelo (v_kpi_modelo)\n  - Conteo de alertas abiertas por severidad (v_alert_counts)\n  - SKUs procesados (conteo de v_demanda_futura_7_14_28)\n  - Stockouts (conteo de v_riesgo_quiebre_7d donde riesgo=true)",
+				"operationId": "api_dashboard_summary_api_dashboard_summary_get",
+				"responses": {
+					"200": {
+						"description": "Successful Response",
+						"content": {
+							"application/json": {
+								"schema": {}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/": {
+			"get": {
+				"summary": "Root",
+				"operationId": "root__get",
+				"responses": {
+					"200": {
+						"description": "Successful Response",
+						"content": {
+							"application/json": {
+								"schema": {}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/health": {
+			"get": {
+				"summary": "Health Check",
+				"operationId": "health_check_health_get",
+				"responses": {
+					"200": {
+						"description": "Successful Response",
+						"content": {
+							"application/json": {
+								"schema": {}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/info": {
+			"get": {
+				"summary": "Api Info",
+				"operationId": "api_info_api_info_get",
+				"responses": {
+					"200": {
+						"description": "Successful Response",
+						"content": {
+							"application/json": {
+								"schema": {}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/forecast": {
+			"post": {
+				"summary": "Create Forecast",
+				"description": "Genera pronóstico y persiste resultados/metricas. Protegido por lock de concurrencia.",
+				"operationId": "create_forecast_api_forecast_post",
+				"parameters": [
+					{
+						"name": "horizonte_dias",
+						"in": "query",
+						"required": false,
+						"schema": {
+							"type": "integer",
+							"maximum": 28,
+							"minimum": 7,
+							"description": "7, 14 o 28",
+							"default": 7,
+							"title": "Horizonte Dias"
+						},
+						"description": "7, 14 o 28"
+					},
+					{
+						"name": "skus",
+						"in": "query",
+						"required": false,
+						"schema": {
+							"anyOf": [
+								{
+									"type": "array",
+									"items": {
+										"type": "string"
+									}
+								},
+								{
+									"type": "null"
+								}
+							],
+							"description": "Lista de SKUs opcional",
+							"title": "Skus"
+						},
+						"description": "Lista de SKUs opcional"
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "Successful Response",
+						"content": {
+							"application/json": {
+								"schema": {}
+							}
+						}
+					},
+					"422": {
+						"description": "Validation Error",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/HTTPValidationError"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/forecast": {
+			"post": {
+				"summary": "Forecast Alias",
+				"operationId": "forecast_alias_forecast_post",
+				"parameters": [
+					{
+						"name": "horizonte_dias",
+						"in": "query",
+						"required": false,
+						"schema": {
+							"type": "integer",
+							"maximum": 28,
+							"minimum": 7,
+							"default": 7,
+							"title": "Horizonte Dias"
+						}
+					},
+					{
+						"name": "skus",
+						"in": "query",
+						"required": false,
+						"schema": {
+							"anyOf": [
+								{
+									"type": "array",
+									"items": {
+										"type": "string"
+									}
+								},
+								{
+									"type": "null"
+								}
+							],
+							"title": "Skus"
+						}
+					},
+					{
+						"name": "x-cron-secret",
+						"in": "header",
+						"required": false,
+						"schema": {
+							"anyOf": [
+								{
+									"type": "string"
+								},
+								{
+									"type": "null"
+								}
+							],
+							"title": "X-Cron-Secret"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "Successful Response",
+						"content": {
+							"application/json": {
+								"schema": {}
+							}
+						}
+					},
+					"422": {
+						"description": "Validation Error",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/HTTPValidationError"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/forecast/latest": {
+			"get": {
+				"summary": "Get Latest Forecast",
+				"description": "Último forecast (vista v_forecast_latest).",
+				"operationId": "get_latest_forecast_api_forecast_latest_get",
+				"parameters": [
+					{
+						"name": "sku",
+						"in": "query",
+						"required": false,
+						"schema": {
+							"anyOf": [
+								{
+									"type": "string"
+								},
+								{
+									"type": "null"
+								}
+							],
+							"title": "Sku"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "Successful Response",
+						"content": {
+							"application/json": {
+								"schema": {}
+							}
+						}
+					},
+					"422": {
+						"description": "Validation Error",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/HTTPValidationError"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/alerts": {
+			"get": {
+				"summary": "Get Alerts",
+				"description": "Alertas activas (resuelta=false).",
+				"operationId": "get_alerts_api_alerts_get",
+				"parameters": [
+					{
+						"name": "sku",
+						"in": "query",
+						"required": false,
+						"schema": {
+							"anyOf": [
+								{
+									"type": "string"
+								},
+								{
+									"type": "null"
+								}
+							],
+							"title": "Sku"
+						}
+					},
+					{
+						"name": "tipo_alerta",
+						"in": "query",
+						"required": false,
+						"schema": {
+							"anyOf": [
+								{
+									"type": "string"
+								},
+								{
+									"type": "null"
+								}
+							],
+							"title": "Tipo Alerta"
+						}
+					},
+					{
+						"name": "severidad",
+						"in": "query",
+						"required": false,
+						"schema": {
+							"anyOf": [
+								{
+									"type": "string"
+								},
+								{
+									"type": "null"
+								}
+							],
+							"title": "Severidad"
+						}
+					},
+					{
+						"name": "limit",
+						"in": "query",
+						"required": false,
+						"schema": {
+							"type": "integer",
+							"maximum": 500,
+							"minimum": 1,
+							"default": 100,
+							"title": "Limit"
+						}
+					},
+					{
+						"name": "offset",
+						"in": "query",
+						"required": false,
+						"schema": {
+							"type": "integer",
+							"minimum": 0,
+							"default": 0,
+							"title": "Offset"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "Successful Response",
+						"content": {
+							"application/json": {
+								"schema": {}
+							}
+						}
+					},
+					"422": {
+						"description": "Validation Error",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/HTTPValidationError"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/alerts/{alert_id}/acknowledge": {
+			"post": {
+				"summary": "Acknowledge Alert",
+				"description": "Marca una alerta como resuelta (RPC ack_alert).",
+				"operationId": "acknowledge_alert_api_alerts__alert_id__acknowledge_post",
+				"parameters": [
+					{
+						"name": "alert_id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"title": "Alert Id"
+						}
+					},
+					{
+						"name": "comentario",
+						"in": "query",
+						"required": false,
+						"schema": {
+							"anyOf": [
+								{
+									"type": "string"
+								},
+								{
+									"type": "null"
+								}
+							],
+							"title": "Comentario"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "Successful Response",
+						"content": {
+							"application/json": {
+								"schema": {}
+							}
+						}
+					},
+					"422": {
+						"description": "Validation Error",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/HTTPValidationError"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/alerts/recompute": {
+			"post": {
+				"summary": "Api Recompute Alerts",
+				"description": "Recalcula alertas de QUIEBRE_STOCK y VENCIMIENTO (RF-03).",
+				"operationId": "api_recompute_alerts_api_alerts_recompute_post",
+				"responses": {
+					"200": {
+						"description": "Successful Response",
+						"content": {
+							"application/json": {
+								"schema": {}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/inventory/current": {
+			"get": {
+				"summary": "Get Inventory Current",
+				"description": "Último inventario por SKU (últimos 7 días).",
+				"operationId": "get_inventory_current_api_inventory_current_get",
+				"parameters": [
+					{
+						"name": "sku",
+						"in": "query",
+						"required": false,
+						"schema": {
+							"anyOf": [
+								{
+									"type": "string"
+								},
+								{
+									"type": "null"
+								}
+							],
+							"title": "Sku"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "Successful Response",
+						"content": {
+							"application/json": {
+								"schema": {}
+							}
+						}
+					},
+					"422": {
+						"description": "Validation Error",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/HTTPValidationError"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/metrics/model": {
+			"get": {
+				"summary": "Get Model Metrics",
+				"description": "KPIs del modelo (vista v_kpi_modelo).",
+				"operationId": "get_model_metrics_api_metrics_model_get",
+				"responses": {
+					"200": {
+						"description": "Successful Response",
+						"content": {
+							"application/json": {
+								"schema": {}
+							}
+						}
+					}
+				}
+			}
+		}
+	},
+	"components": {
+		"schemas": {
+			"HTTPValidationError": {
+				"properties": {
+					"detail": {
+						"items": {
+							"$ref": "#/components/schemas/ValidationError"
+						},
+						"type": "array",
+						"title": "Detail"
+					}
+				},
+				"type": "object",
+				"title": "HTTPValidationError"
+			},
+			"ValidationError": {
+				"properties": {
+					"loc": {
+						"items": {
+							"anyOf": [
+								{
+									"type": "string"
+								},
+								{
+									"type": "integer"
+								}
+							]
+						},
+						"type": "array",
+						"title": "Location"
+					},
+					"msg": {
+						"type": "string",
+						"title": "Message"
+					},
+					"type": {
+						"type": "string",
+						"title": "Error Type"
+					}
+				},
+				"type": "object",
+				"required": [
+					"loc",
+					"msg",
+					"type"
+				],
+				"title": "ValidationError"
+			}
+		}
+	}
+}
