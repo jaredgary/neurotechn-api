@@ -1,23 +1,44 @@
-# fly.toml app configuration file
-app = 'neurotechn-api'
-primary_region = 'mia'
+# =====================================================================
+# Fly.io Configuration
+# Sistema de Alertas Predictivas - Farmacias Siman
+# =====================================================================
+
+app = "farmacias-siman-api"
+primary_region = "mia"  # Miami (más cercano a Honduras)
 
 [build]
+  dockerfile = "Dockerfile"
+
+[env]
+  PORT = "8000"
+  LOG_LEVEL = "INFO"
 
 [http_service]
   internal_port = 8000
   force_https = true
-  auto_stop_machines = 'stop'
+  auto_stop_machines = true
   auto_start_machines = true
   min_machines_running = 0
-  processes = ['app']
+  processes = ["app"]
 
-[[vm]]
-  memory = '1gb'
-  cpu_kind = 'shared'
+  [[http_service.checks]]
+    grace_period = "10s"
+    interval = "30s"
+    method = "GET"
+    timeout = "5s"
+    path = "/health"
+
+[vm]
+  cpu_kind = "shared"
   cpus = 1
-  memory_mb = 1024
+  memory_mb = 256
 
-[processes]
-  app = "gunicorn -w 4 -k uvicorn.workers.UvicornWorker --bind 0.0.0.0:8000 src.main:app"
-  worker = "celery -A src.celery_app worker --loglevel=info -Q forecast,alerts,maintenance"
+# Configuración de auto-scaling (opcional)
+[scaling]
+  min_count = 0
+  max_count = 2
+
+# Configuración de métricas (opcional)
+[metrics]
+  port = 8000
+  path = "/health"

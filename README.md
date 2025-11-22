@@ -1,530 +1,303 @@
-# 🏥 Sistema Predictivo de Gestión de Inventario Farmacéutico - MVP Farmacias Siman
+# 🏥 Sistema de Alertas Predictivas - Farmacias Siman
 
-## 📋 Resumen Ejecutivo
+Sistema de información con capacidades predictivas para gestión de inventario farmacéutico usando Machine Learning (XGBoost).
 
-Sistema de inteligencia artificial para la gestión predictiva de inventario de medicamentos esenciales en Farmacias Siman (Sucursal San Pedro Sula), diseñado para mitigar quiebres de stock y optimizar la cadena de suministro mediante pronósticos con XGBoost, dashboards en tiempo real y alertas inteligentes.
+**Proyecto de Tesis GTI - UNITEC Honduras**  
+**Autor:** Gary González Zepeda  
+**Fecha:** Noviembre 2025
 
-### 🎯 Indicadores Clave de Éxito
-- **MAPE objetivo:** < 30% (con 90 días de datos históricos)
-- **Tiempo de actualización dashboards:** ≤ 15 minutos
-- **Disponibilidad del sistema:** 99.5% (arquitectura objetivo)
-- **Horizontes de pronóstico:** 7, 14 y 28 días
+---
 
-## 📚 Tabla de Contenidos
+## 📊 Descripción del Proyecto
 
-1. [Objetivos del Proyecto](#-objetivos-del-proyecto)
-2. [Alcance del MVP](#-alcance-del-mvp)
-3. [Arquitectura del Sistema](#-arquitectura-del-sistema)
-4. [Estructura de la Base de Datos](#-estructura-de-la-base-de-datos)
-5. [Modelo Predictivo XGBoost](#-modelo-predictivo-xgboost)
-6. [Sistema de Alertas](#-sistema-de-alertas)
-7. [Dashboards y Visualización](#-dashboards-y-visualización)
-8. [Instalación y Configuración](#-instalación-y-configuración)
-9. [API y Endpoints](#-api-y-endpoints)
-10. [Monitoreo y Métricas](#-monitoreo-y-métricas)
-11. [Roadmap Post-MVP](#-roadmap-post-mvp)
+Sistema de alertas predictivas de inventario para la cadena Farmacias Siman, piloto en sucursal Circunvalación, San Pedro Sula. Utiliza algoritmo XGBoost para predecir demanda y generar alertas automáticas de quiebre de stock.
 
-## 🎯 Objetivos del Proyecto
+### Métricas del Modelo ML
+- **MAE**: 379.69 unidades
+- **MAPE**: 3.85%
+- **Horizonte óptimo**: 14 días
+- **Scoring**: 97/100 puntos
 
-### Objetivo General
-Diseñar un modelo informacional con capacidades predictivas para apoyar la gestión de la cadena de suministro de medicamentos esenciales en Farmacias Siman, generando dashboards y alertas útiles para la toma de decisiones.
+### Cobertura del Piloto
+- **SKUs**: 120 medicamentos (MED001-MED120)
+- **Período de datos**: 2025-08-02 a 2025-10-30 (90 días)
+- **Transacciones**: 10,800 registros
+- **Grupos terapéuticos**: 25
+- **Viabilidad del sistema**: 89/100 (ALTAMENTE VIABLE)
 
-### Objetivos Específicos
-1. ✅ Identificar requisitos funcionales y no funcionales considerando condiciones tecnológicas y operativas
-2. ✅ Definir enfoque de IA y técnicas de análisis para reposición de medicamentos
-3. ✅ Especificar arquitectura cloud escalable y segura
-4. ✅ Establecer marco de evaluación con métricas de desempeño
+---
 
-## 📊 Alcance del MVP
+## 🚀 Stack Tecnológico
 
-### Limitaciones del Proyecto
-- ⏱️ **Tiempo:** 19 semanas de desarrollo (sin implementación operativa)
-- 📈 **Datos:** 90 días históricos para validación predictiva
-- 📍 **Ámbito:** Diseño conceptual para sucursal San Pedro Sula
-- ⚙️ **Operación:** Sin modificación de procesos existentes
-- 🎯 **Enfoque:** Arquitectura informacional con validación técnica limitada
+### Backend
+- **Framework**: FastAPI 0.115.0
+- **Lenguaje**: Python 3.11
+- **Base de datos**: Supabase (PostgreSQL 15)
+- **Deployment**: Fly.io (región Miami)
 
-### Funcionalidades Principales
-
-| ID | Funcionalidad | Descripción |
-|----|--------------|-------------|
-| RF-01 | Modelo Predictivo | XGBoost con validación cruzada temporal, cobertura por SKU y familia ATC |
-| RF-02 | Dashboards | Vistas de ventas, inventarios, pronósticos y alertas con actualización ≤15 min |
-| RF-03 | Sistema de Alertas | Detección de riesgos de quiebre/vencimientos cada 4 horas |
-
-## 🏗️ Arquitectura del Sistema
-
-### Stack Tecnológico
-
-```mermaid
-graph TB
-    subgraph "Frontend"
-        A[Dashboard Web - React/Next.js]
-        B[Mobile App - React Native]
-    end
-    
-    subgraph "Backend"
-        C[API REST - FastAPI/Python]
-        D[Modelo XGBoost]
-        E[Sistema de Alertas]
-    end
-    
-    subgraph "Base de Datos"
-        F[Supabase PostgreSQL]
-        G[Vector Store - pgvector]
-    end
-    
-    subgraph "Infraestructura"
-        H[Cron Jobs - pg_cron]
-        I[HTTP Client - pg_net]
-    end
-    
-    A --> C
-    B --> C
-    C --> D
-    C --> E
-    C --> F
-    F --> G
-    F --> H
-    F --> I
+### Dependencias Principales
+```
+fastapi==0.115.0
+uvicorn==0.32.0
+supabase==2.9.0
+pydantic==2.9.2
 ```
 
-### Componentes Principales
+---
 
-1. **Capa de Datos (Supabase)**
-   - PostgreSQL con extensiones: pgvector, pg_cron, pg_net
-   - Row Level Security (RLS) habilitado
-   - Vistas materializadas para dashboards
-
-2. **Capa de Procesamiento**
-   - Modelo XGBoost para pronósticos
-   - Motor de alertas con reglas de negocio
-   - APIs RESTful con FastAPI
-
-3. **Capa de Presentación**
-   - Dashboards interactivos
-   - Sistema de notificaciones
-   - Reportes automatizados
-
-## 🗄️ Estructura de la Base de Datos
-
-### Tablas Principales
-
-#### 1. **sku_atc** - Catálogo de Productos
-```sql
-- sku (PK)
-- nombre_producto
-- atc_code (clasificación ATC)
-- lead_time_dias
-- embedding (vector 384D para búsqueda semántica)
+## 📁 Estructura del Proyecto
+```
+backend/
+├── app/
+│   ├── main.py              # Aplicación principal
+│   ├── config.py            # Configuración
+│   ├── database.py          # Conexión Supabase
+│   ├── api/v1/              # Endpoints API
+│   │   ├── router.py
+│   │   ├── dashboard.py
+│   │   ├── alertas.py
+│   │   ├── inventarios.py
+│   │   ├── predicciones.py
+│   │   └── medicamentos.py
+│   ├── models/              # Modelos Pydantic
+│   │   ├── alerta.py
+│   │   ├── inventario.py
+│   │   ├── prediccion.py
+│   │   └── medicamento.py
+│   └── services/            # Lógica de negocio
+│       ├── alerta_service.py
+│       └── prediccion_service.py
+├── scripts/
+│   └── load_initial_data.py
+├── requirements.txt
+├── Dockerfile
+├── fly.toml
+└── README.md
 ```
 
-#### 2. **ventas_diarias** - Histórico de Ventas
-```sql
-- fecha, sku (PK compuesta)
-- unidades_vendidas
-- promo_flag
-- canal
-```
+---
 
-#### 3. **inventario_diario** - Estado del Inventario
-```sql
-- fecha, sku (PK compuesta)
-- unidades_stock
-- stock_seguridad
-```
+## 🛠️ Instalación y Configuración
 
-#### 4. **lotes_caducidad** - Control de Vencimientos
-```sql
-- lote_id (PK)
-- sku
-- unidades
-- fecha_caducidad
-```
-
-#### 5. **forecast_historico** - Pronósticos Generados
-```sql
-- run_id, sku, fecha_objetivo (PK compuesta)
-- unidades_pronosticadas
-```
-
-#### 6. **alertas** - Sistema de Notificaciones
-```sql
-- id (PK)
-- tipo_alerta (ENUM: QUIEBRE_STOCK, VENCIMIENTO)
-- severidad (ENUM: BAJA, MEDIA, ALTA, CRITICA)
-- estado
-```
-
-### Vistas Principales para Dashboards
-
-| Vista | Propósito | Actualización |
-|-------|-----------|---------------|
-| `v_latest_run` | Último modelo ejecutado | Tiempo real |
-| `v_demanda_futura_7_14_28` | Pronósticos agregados | Cada 4 horas |
-| `v_caducidades_30d` | Productos próximos a vencer | Tiempo real |
-| `v_kpi_modelo` | Métricas de performance | Después de cada run |
-| `v_alertas_abiertas` | Alertas pendientes | Tiempo real |
-| `v_estado_inventario` | Estado actual completo | Tiempo real |
-| `v_resumen_ejecutivo` | KPIs principales | Tiempo real |
-
-## 🤖 Modelo Predictivo XGBoost
-
-### Características del Modelo
-
-```python
-# Configuración base del modelo
-model_config = {
-    "algorithm": "XGBoost",
-    "horizons": [7, 14, 28],  # días
-    "training_window": 90,      # días históricos
-    "validation": "time_series_cv",
-    "features": [
-        "lag_features",         # Valores pasados
-        "rolling_statistics",   # Media, desviación móvil
-        "calendar_features",    # Día semana, feriados
-        "promotion_flags",      # Indicadores de promoción
-        "atc_embeddings"       # Embeddings de categoría
-    ]
-}
-```
-
-### Pipeline de Entrenamiento
-
-1. **Ingesta de Datos** → Extracción desde Supabase
-2. **Feature Engineering** → Creación de características
-3. **Validación Temporal** → Cross-validation específica para series de tiempo
-4. **Entrenamiento** → XGBoost con optimización de hiperparámetros
-5. **Evaluación** → MAPE, MAE, RMSE, Sesgo
-6. **Persistencia** → Guardado de pronósticos y métricas
-
-### Métricas de Evaluación
-
-| Métrica | Objetivo | Descripción |
-|---------|----------|-------------|
-| MAPE | < 30% | Error porcentual absoluto medio |
-| MAE | Minimizar | Error absoluto medio |
-| RMSE | Minimizar | Raíz del error cuadrático medio |
-| Sesgo | ≈ 0 | Tendencia sistemática del modelo |
-| R² | > 0.7 | Varianza explicada |
-
-## 🚨 Sistema de Alertas
-
-### Tipos de Alertas
-
-#### 1. **Quiebre de Stock**
-- Trigger: Stock < Stock de Seguridad
-- Severidad: Basada en criticidad del medicamento
-- Acción: Orden de compra urgente
-
-#### 2. **Vencimiento**
-- Trigger: Fecha caducidad < 30 días
-- Severidad: Según días restantes
-- Acción: Promoción o devolución
-
-#### 3. **Sobrestock** (Futuro)
-- Trigger: Stock > 150% del máximo
-- Severidad: Según valor económico
-- Acción: Detener reposición
-
-#### 4. **Demanda Anómala** (Futuro)
-- Trigger: Variación > 200% del promedio
-- Severidad: Según impacto
-- Acción: Revisión manual
-
-### Flujo de Gestión de Alertas
-
-```mermaid
-stateDiagram-v2
-    [*] --> Pendiente: Alerta generada
-    Pendiente --> EnRevision: Asignada
-    EnRevision --> Resuelta: Acción tomada
-    EnRevision --> Descartada: Falso positivo
-    Resuelta --> [*]
-    Descartada --> [*]
-```
-
-## 📊 Dashboards y Visualización
-
-### Dashboard Principal - KPIs Ejecutivos
-
-```
-┌─────────────────────────────────────────────────────────────┐
-│                    RESUMEN EJECUTIVO                        │
-├──────────────┬──────────────┬──────────────┬──────────────┤
-│ Sin Stock    │ Stock Crítico│ Alertas      │ MAPE Modelo  │
-│     12       │      28      │     15       │    24.5%     │
-├──────────────┴──────────────┴──────────────┴──────────────┤
-│                  TENDENCIA DE VENTAS (30d)                  │
-│ [Gráfico de líneas con ventas diarias]                     │
-├─────────────────────────────────────────────────────────────┤
-│              PRODUCTOS CRÍTICOS - TOP 10                    │
-│ [Tabla con SKU, Stock, Días cobertura, Acción]            │
-└─────────────────────────────────────────────────────────────┘
-```
-
-### Dashboards Específicos
-
-1. **Dashboard de Inventario**
-   - Estado actual por SKU
-   - Días de cobertura
-   - Análisis ABC
-   - Mapa de calor por categoría ATC
-
-2. **Dashboard de Pronósticos**
-   - Demanda proyectada 7/14/28 días
-   - Intervalos de confianza
-   - Comparación real vs pronóstico
-   - Métricas de precisión por SKU
-
-3. **Dashboard de Alertas**
-   - Bandeja de entrada
-   - Priorización por score
-   - Tiempo promedio de resolución
-   - Historial de acciones
-
-4. **Dashboard de Caducidades**
-   - Timeline de vencimientos
-   - Valor en riesgo
-   - Lotes por vencer (7/30/60 días)
-   - Sugerencias de acción
-
-## 🚀 Instalación y Configuración
-
-### Prerrequisitos
-
+### 1. Clonar el repositorio
 ```bash
-# Versiones requeridas
-- Python 3.9+
-- Node.js 18+
-- PostgreSQL 14+
-- Supabase CLI
+git clone <repository-url>
+cd backend
 ```
 
-### 1. Configuración de Supabase
-
+### 2. Crear entorno virtual
 ```bash
-# Clonar el repositorio
-git clone https://github.com/tu-org/farmacias-siman-mvp.git
-cd farmacias-siman-mvp
+python -m venv venv
+source venv/bin/activate  # Linux/Mac
+# o
+venv\Scripts\activate  # Windows
+```
 
-# Configurar variables de entorno
+### 3. Instalar dependencias
+```bash
+pip install -r requirements.txt
+```
+
+### 4. Configurar variables de entorno
+```bash
 cp .env.example .env
 # Editar .env con tus credenciales de Supabase
 ```
 
-### 2. Instalación del Backend (Python)
-
+### 5. Ejecutar localmente
 ```bash
-# Crear entorno virtual
-python -m venv venv
-source venv/bin/activate  # En Windows: venv\Scripts\activate
-
-# Instalar dependencias
-pip install -r requirements.txt
-
-# Configurar la API
-cd backend
-uvicorn main:app --reload --port 8000
+uvicorn app.main:app --reload --port 8000
 ```
 
-### 3. Instalación del Frontend
+### 6. Acceder a la documentación
+- **Swagger UI**: http://localhost:8000/docs
+- **ReDoc**: http://localhost:8000/redoc
+- **Health Check**: http://localhost:8000/health
 
+---
+
+## 🚀 Deployment en Fly.io
+
+### 1. Instalar Fly CLI
 ```bash
-# Instalar dependencias
-cd frontend
-npm install
-
-# Configurar variables de entorno
-cp .env.local.example .env.local
-# Editar .env.local con URL de Supabase y anon key
-
-# Iniciar servidor de desarrollo
-npm run dev
+curl -L https://fly.io/install.sh | sh
 ```
 
-### 4. Configuración de Jobs Programados
+### 2. Login en Fly.io
+```bash
+fly auth login
+```
 
+### 3. Lanzar aplicación (primera vez)
+```bash
+fly launch --name farmacias-siman-api --region mia
+```
+
+### 4. Configurar secrets
+```bash
+fly secrets set SUPABASE_URL="https://your-project.supabase.co"
+fly secrets set SUPABASE_KEY="your-anon-key"
+fly secrets set SUPABASE_SERVICE_KEY="your-service-role-key"
+```
+
+### 5. Desplegar
+```bash
+fly deploy
+```
+
+### 6. Ver logs
+```bash
+fly logs
+```
+
+### 7. Abrir en navegador
+```bash
+fly open
+```
+
+---
+
+## 📡 Endpoints Principales
+
+### Dashboard
+```
+GET /api/v1/dashboard/stats
+GET /api/v1/dashboard/alertas-recientes
+GET /api/v1/dashboard/inventarios-criticos
+GET /api/v1/dashboard/tendencias
+```
+
+### Alertas
+```
+GET /api/v1/alertas
+GET /api/v1/alertas/{id}
+PATCH /api/v1/alertas/{id}/atender
+PATCH /api/v1/alertas/{id}/descartar
+POST /api/v1/alertas/generar
+```
+
+### Inventarios
+```
+GET /api/v1/inventarios
+GET /api/v1/inventarios/{sku}
+PATCH /api/v1/inventarios/{sku}
+GET /api/v1/inventarios/analisis/proximos-vencer
+GET /api/v1/inventarios/analisis/stock-negativo
+```
+
+### Predicciones
+```
+GET /api/v1/predicciones/{sku}
+GET /api/v1/predicciones/{sku}/historico
+POST /api/v1/predicciones
+GET /api/v1/predicciones/metricas/agregadas
+```
+
+### Medicamentos
+```
+GET /api/v1/medicamentos
+GET /api/v1/medicamentos/search?q=acetaminofen
+GET /api/v1/medicamentos/{sku}
+GET /api/v1/medicamentos/categoria/esenciales
+```
+
+---
+
+## 🧪 Testing
+
+### Ejecutar tests
+```bash
+pytest
+```
+
+### Test de cobertura
+```bash
+pytest --cov=app tests/
+```
+
+---
+
+## 📊 Base de Datos
+
+### Conexión Supabase
+El sistema utiliza Supabase (PostgreSQL 15) con:
+- **9 tablas principales**
+- **18 índices optimizados**
+- **5 funciones PL/pgSQL**
+- **3 roles**: admin, farmacia, readonly
+
+### Funciones PostgreSQL Clave
 ```sql
--- En Supabase SQL Editor
--- Los jobs ya están configurados en el schema:
-
--- Forecast cada 4 horas
-SELECT cron.schedule('forecast_4h', '0 */4 * * *', 
-  $$ SELECT public.call_forecast(); $$);
-
--- Limpieza semanal
-SELECT cron.schedule('cleanup_weekly', '0 2 * * 0', 
-  $$ SELECT public.cleanup_old_data(); $$);
+calcular_stock_proyectado(sku, dias)  -- Calcula stock futuro
+generar_alertas_batch()               -- Genera alertas automáticas
+calcular_score_urgencia(dias)         -- Calcula urgencia 0-1
+obtener_factores_explicativos(sku)   -- Retorna JSON con drivers
 ```
 
-## 🔌 API y Endpoints
+---
 
-### Endpoints Principales
+## 🔒 Seguridad
 
-#### Pronósticos
-```http
-POST /api/forecast
-{
-  "horizonte_dias": 28,
-  "skus": ["SKU001", "SKU002"] // opcional, todos si no se especifica
-}
+- **RLS (Row Level Security)** habilitado en todas las tablas
+- **3 roles**: admin, farmacia, readonly
+- **CORS** configurado para orígenes permitidos
+- **Secrets** manejados con Fly.io secrets
+- **Variables sensibles** nunca en código
 
-GET /api/forecast/latest
-GET /api/forecast/{run_id}
+---
+
+## 📝 Logs
+
+Los logs se generan en formato estructurado:
+```
+2025-11-22 10:30:15 - INFO - → GET /api/v1/dashboard/stats
+2025-11-22 10:30:15 - INFO - ← GET /api/v1/dashboard/stats status=200 time=0.123s
 ```
 
-#### Alertas
-```http
-GET /api/alertas?estado=PENDIENTE&severidad=ALTA
-POST /api/alertas/{id}/acknowledge
-{
-  "comentario": "Orden de compra generada #OC-2024-001"
-}
+Ver logs en producción:
+```bash
+fly logs --app farmacias-siman-api
 ```
 
-#### Inventario
-```http
-GET /api/inventario/estado
-GET /api/inventario/criticos
-GET /api/inventario/abc-analysis
+---
+
+## 🐛 Troubleshooting
+
+### Error: "Connection refused" a Supabase
+- Verificar que `SUPABASE_URL` y `SUPABASE_KEY` estén correctos
+- Verificar conectividad de red
+
+### Error: "RLS policy violation"
+- Usar `SUPABASE_SERVICE_KEY` para operaciones admin
+- Verificar que las políticas RLS estén correctamente configuradas
+
+### Error: "Memory limit exceeded" en Fly.io
+```bash
+fly scale memory 512  # Aumentar a 512MB
 ```
 
-#### Métricas
-```http
-GET /api/metricas/modelo
-GET /api/metricas/kpis
-GET /api/metricas/dashboard/{tipo}
-```
+---
 
-### Autenticación
+## 📚 Referencias
 
-```javascript
-// Ejemplo de autenticación con Supabase
-import { createClient } from '@supabase/supabase-js'
+- [FastAPI Documentation](https://fastapi.tiangolo.com)
+- [Supabase Python Client](https://supabase.com/docs/reference/python)
+- [Fly.io Documentation](https://fly.io/docs)
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-)
+---
 
-// Login
-const { data, error } = await supabase.auth.signInWithPassword({
-  email: 'usuario@farmacia.com',
-  password: 'password'
-})
-```
+## 👨‍💻 Autor
 
-## 📈 Monitoreo y Métricas
+**Gary González Zepeda**  
+Maestría en Gestión de Tecnologías de la Información (GTI)  
+UNITEC Honduras
 
-### KPIs del Sistema
-
-| Categoría | Métrica | Objetivo | Frecuencia |
-|-----------|---------|----------|------------|
-| **Modelo** | MAPE promedio | < 30% | Cada run |
-| **Modelo** | % SKUs MAPE < 30% | > 70% | Cada run |
-| **Inventario** | % Quiebres de stock | < 5% | Diario |
-| **Inventario** | Días promedio cobertura | > 14 | Diario |
-| **Alertas** | Tiempo resolución | < 4 horas | Por alerta |
-| **Alertas** | % Falsos positivos | < 10% | Semanal |
-| **Sistema** | Disponibilidad | > 99.5% | Continuo |
-| **Sistema** | Latencia API p95 | < 500ms | Continuo |
-
-### Queries de Monitoreo
-
-```sql
--- Estado general del sistema
-SELECT * FROM public.v_resumen_ejecutivo;
-
--- Calidad del modelo
-SELECT * FROM public.v_kpi_modelo;
-
--- Productos críticos
-SELECT * FROM public.v_estado_inventario 
-WHERE estado_stock IN ('SIN_STOCK', 'CRITICO')
-ORDER BY es_esencial DESC, dias_inventario_disponible;
-
--- Alertas pendientes prioritarias
-SELECT * FROM public.v_alertas_activas 
-WHERE score_prioridad > 70
-ORDER BY score_prioridad DESC;
-```
-
-## 🗺️ Roadmap Post-MVP
-
-### Fase 1: Estabilización (Meses 1-2)
-- [ ] Ajuste fino del modelo con datos reales
-- [ ] Calibración de umbrales de alertas
-- [ ] Capacitación del personal
-- [ ] Documentación operativa
-
-### Fase 2: Expansión (Meses 3-4)
-- [ ] Integración con sistema ERP
-- [ ] Modelo de optimización de pedidos
-- [ ] Análisis de proveedores
-- [ ] Dashboard móvil nativo
-
-### Fase 3: Inteligencia Avanzada (Meses 5-6)
-- [ ] Deep Learning para patrones complejos
-- [ ] Optimización multi-objetivo
-- [ ] Análisis predictivo de promociones
-- [ ] Sistema de recomendaciones
-
-### Fase 4: Escalamiento (Meses 7+)
-- [ ] Expansión a otras sucursales
-- [ ] Integración con cadena de suministro
-- [ ] Analytics avanzado
-- [ ] IA Generativa para insights
-
-## 📝 Notas de Implementación
-
-### Consideraciones Importantes
-
-1. **Limitación de Datos**: Con solo 90 días de histórico, el modelo puede tener menor precisión en:
-   - Estacionalidades anuales
-   - Eventos especiales no recurrentes
-   - Productos nuevos sin historial
-
-2. **Mejoras Recomendadas**:
-   - Implementar transfer learning desde productos similares
-   - Usar embeddings de productos para cold-start
-   - Incorporar datos externos (clima, epidemiología)
-
-3. **Seguridad**:
-   - RLS habilitado en todas las tablas
-   - API keys rotadas mensualmente
-   - Logs de auditoría completos
-   - Encriptación en tránsito y reposo
-
-4. **Performance**:
-   - Índices optimizados para queries frecuentes
-   - Vistas materializadas para dashboards
-   - Cache Redis para endpoints críticos
-   - CDN para assets estáticos
-
-## 🤝 Contribuidores
-
-- **Product Owner**: Dirección de Farmacia
-- **Technical Lead**: Equipo de Desarrollo
-- **Data Scientists**: Modelo Predictivo
-- **UX/UI**: Diseño de Dashboards
-- **QA**: Validación y Testing
+---
 
 ## 📄 Licencia
 
-Proyecto privado - Farmacias Siman © 2024
+Este proyecto es parte de una tesis académica de UNITEC Honduras.
 
 ---
 
-## 📞 Soporte
-
-Para soporte técnico o consultas sobre el sistema:
-- 📧 Email: soporte-mvp@farmaciassiman.com
-- 📱 Slack: #canal-mvp-inventario
-- 📚 Wiki: [Documentación Interna](https://wiki.interno.com/mvp-inventario)
-
----
-
-**Versión**: 1.0.0  
-**Última actualización**: Diciembre 2024  
-**Estado**: En desarrollo (MVP)
+**Última actualización**: 2025-11-22
