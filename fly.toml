@@ -1,44 +1,36 @@
-# =====================================================================
-# Fly.io Configuration
-# Sistema de Alertas Predictivas - Farmacias Siman
-# =====================================================================
+# fly.toml app configuration file generated for farmacias-siman-api on 2025-11-22T08:05:54-06:00
+#
+# See https://fly.io/docs/reference/configuration/ for information about how to use this file.
+#
 
-app = "farmacias-siman-api"
-primary_region = "mia"  # Miami (más cercano a Honduras)
+app = 'farmacias-siman-api'
+primary_region = 'dfw'
 
 [build]
-  dockerfile = "Dockerfile"
+  dockerfile = 'Dockerfile'
 
 [env]
-  PORT = "8000"
-  LOG_LEVEL = "INFO"
+  LOG_LEVEL = 'INFO'
+  PORT = '8000'
 
 [http_service]
   internal_port = 8000
   force_https = true
-  auto_stop_machines = true
+  auto_stop_machines = 'stop'
   auto_start_machines = true
   min_machines_running = 0
-  processes = ["app"]
+  processes = ['app']
 
   [[http_service.checks]]
-    grace_period = "10s"
-    interval = "30s"
-    method = "GET"
-    timeout = "5s"
-    path = "/health"
+    interval = '30s'
+    timeout = '5s'
+    grace_period = '10s'
+    method = 'GET'
+    path = '/health'
 
-[vm]
-  cpu_kind = "shared"
-  cpus = 1
-  memory_mb = 256
+[[vm]]
+  size = 'shared-cpu-1x'
 
-# Configuración de auto-scaling (opcional)
-[scaling]
-  min_count = 0
-  max_count = 2
-
-# Configuración de métricas (opcional)
-[metrics]
+[[metrics]]
   port = 8000
-  path = "/health"
+  path = '/health'
