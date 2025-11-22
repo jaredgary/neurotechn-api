@@ -54,9 +54,9 @@ async def obtener_estadisticas_dashboard():
         
         # Medicamentos esenciales en riesgo
         esenciales_riesgo = supabase_client.table('inventarios_actuales') \
-            .select('count', count='exact', catalogo_medicamentos!inner(es_esencial)') \
-            .lt('stock_proyectado_14d', 0) \
+            .select('*, catalogo_medicamentos!inner(es_esencial)', count='exact') \
             .eq('catalogo_medicamentos.es_esencial', True) \
+            .lt('stock_proyectado_14d', 0) \
             .execute()
         
         return {
