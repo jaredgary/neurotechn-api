@@ -1,24 +1,46 @@
-# FastAPI y servidor
+# =====================================================================
+# BACKEND FASTAPI - FARMACIAS SIMAN
+# Versión: 1.1.0 - Auditoría completada
+# Fecha: 2025-11-27
+# =====================================================================
+
+# FastAPI y servidor ASGI
 fastapi==0.115.0
 uvicorn[standard]==0.32.0
 pydantic==2.9.2
 pydantic-settings==2.6.0
 
-# Base de datos
+# Base de datos Supabase
 supabase==2.9.0
 postgrest==0.17.0
+
+# Procesamiento de datos (CRÍTICO para OE2/OE4)
+pandas==2.2.0
+numpy==1.26.4
+
+# Machine Learning (XGBoost - OE2: MAE=379.69, MAPE=3.85%)
+xgboost==2.0.3
+scikit-learn==1.4.0
 
 # Utilidades
 python-dotenv==1.0.1
 python-multipart==0.0.12
+python-dateutil==2.9.0
 
-# CORS y seguridad
+# Seguridad y autenticación
 python-jose[cryptography]==3.3.0
 passlib[bcrypt]==1.7.4
 
-# Logging y monitoreo
+# Logging estructurado
 python-json-logger==2.0.7
+structlog==24.1.0
 
-# Testing (opcional)
-pytest==8.3.3
+# HTTP client para health checks
 httpx==0.27.2
+
+# Testing
+pytest==8.3.3
+pytest-asyncio==0.24.0
+
+# Compresión
+brotli==1.1.0

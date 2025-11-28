@@ -1,76 +1,52 @@
-# Git files
-.git/
+# =====================================================================
+# .dockerignore - Backend FastAPI
+# Sistema de Alertas Predictivas - Farmacias Siman
+# =====================================================================
+
+# Git
+.git
 .gitignore
 
-# Python cache files
-__pycache__/
-*.py[cod]
-*$py.class
-*.so
+# Python
+__pycache__
+*.pyc
+*.pyo
+*.pyd
 .Python
-*.egg-info/
-dist/
-build/
-*.egg
+pip-log.txt
 
 # Virtual environments
-venv/
-env/
-ENV/
-.venv/
+venv
+.venv
+ENV
 
-# IDE files
-.vscode/
-.idea/
+# Environment (usar fly secrets en producción)
+.env
+.env.*
+
+# IDE
+.idea
+.vscode
 *.swp
-*.swo
-*~
-.DS_Store
 
-# Test and coverage files
-.pytest_cache/
+# Testing
+.pytest_cache
 .coverage
-htmlcov/
-.tox/
-.mypy_cache/
-.ruff_cache/
+htmlcov
+tests/
 
 # Documentation
 *.md
+!README.md
 docs/
-README.md
 
-# Environment files (will be copied separately if needed)
-.env.example
-.env.local
-.env.development
-
-# Logs
-*.log
-logs/
-
-# Temporary files
-tmp/
-temp/
-
-# Jupyter notebooks
-*.ipynb
-.ipynb_checkpoints/
-
-# Docker files
+# Docker
 Dockerfile
 docker-compose*.yml
 .dockerignore
 
-# CI/CD
-.github/
-.gitlab-ci.yml
-.travis.yml
-
-# Development tools configuration
-.pre-commit-config.yaml
-.flake8
-.pylintrc
-pyproject.toml
-setup.cfg
-Makefile
+# Misc
+*.log
+tmp/
+temp/
+.DS_Store
