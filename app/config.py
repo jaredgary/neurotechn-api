@@ -33,12 +33,17 @@ class Settings(BaseSettings):
     SUPABASE_SERVICE_KEY: str      # service_role key para operaciones admin
     
     # ==========================================================
-    # CORS
+    # CORS (Orígenes permitidos para peticiones cross-origin)
     # ==========================================================
     CORS_ORIGINS: List[str] = [
+        # Desarrollo local
         "http://localhost:3000",
         "http://localhost:5173",
-        "https://farmacias-siman.fly.dev"
+        "http://localhost:8000",
+        # Producción
+        "https://farmacias-siman-frontend.fly.dev",  # Frontend en producción
+        "https://farmacias-siman-api.fly.dev",       # Backend en producción
+        "https://farmacias-siman.fly.dev"            # Legacy/alternativo
     ]
     
     # ==========================================================
