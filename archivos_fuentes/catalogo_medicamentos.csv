@@ -1,0 +1,121 @@
+sku,nombre_comercial,nombre_generico,codigo_atc,grupo_terapeutico,presentacion,concentracion,demanda_base,variabilidad,categoria_abc,prob_quiebre,lead_time_dias,stock_seguridad,lote_minimo,es_esencial,requiere_receta,proveedor,precio_unitario_lps,fecha_creacion
+MED001,Sudagrip,Paracetamol + Clorfenamina + Fenilefrina,R05X,Antigripales,Tabletas,500mg + 2mg + 5mg,95.0,0.5,A,0.08,5,150,50,True,False,PROV-6,66.81,2025-10-23
+MED002,Histadril,Difenhidramina,R06AA02,Antihistamínicos,Tabletas,50mg,70.0,0.45,B,0.08,4,100,50,True,False,PROV-1,44.95,2025-10-23
+MED003,Acetaminofén MK,Paracetamol,N02BE01,Analgésicos,Tabletas,500mg,140.0,0.35,A,0.05,3,200,100,True,False,PROV-9,85.26,2025-10-23
+MED004,Acetaminofén MK Jarabe,Paracetamol,N02BE01,Analgésicos,Jarabe/Suspensión,500mg/5ml,70.0,0.385,B,0.06,4,120,60,True,False,PROV-6,59.22,2025-10-23
+MED005,Sertal Compuesto,Papaverina + Hioscina,A03FA01,Antiespasmódicos,Tabletas,30mg + 10mg,65.0,0.4,B,0.06,5,100,50,True,False,PROV-10,74.31,2025-10-23
+MED006,Papaverina + Hioscina Genérico,Papaverina + Hioscina,A03FA01,Antiespasmódicos,Tabletas,30mg + 10mg,45.5,0.36000000000000004,B,0.048,5,70,35,True,False,PROV-8,66.48,2025-10-23
+MED007,NAN Optipro,Fórmula infantil,V06DZ99,Nutrición infantil,Polvo,900g,110.0,0.3,A,0.04,7,150,30,True,False,PROV-2,60.31,2025-10-23
+MED008,Paracetamol,Paracetamol,N02BE01,Analgésicos,Tabletas,500mg,150.0,0.3,A,0.03,3,250,100,True,False,PROV-9,102.98,2025-10-23
+MED009,Ibuprofeno,Ibuprofeno,M01AE01,Antiinflamatorios,Tabletas,400mg,120.0,0.35,A,0.03,3,200,100,True,False,PROV-5,83.78,2025-10-23
+MED010,Ibuprofeno Jarabe,Ibuprofeno,M01AE01,Antiinflamatorios,Jarabe/Suspensión,400mg/5ml,60.0,0.385,B,0.036,4,120,60,True,False,PROV-9,44.99,2025-10-23
+MED011,Ibuprofeno Genérico,Ibuprofeno,M01AE01,Antiinflamatorios,Tabletas,400mg,84.0,0.315,A,0.024,3,140,70,True,False,PROV-5,52.39,2025-10-23
+MED012,Diclofenaco,Diclofenaco sódico,M01AB05,Antiinflamatorios,Tabletas,50mg,95.0,0.3,A,0.04,4,150,50,True,True,PROV-9,67.69,2025-10-23
+MED013,Diclofenaco Jarabe,Diclofenaco sódico,M01AB05,Antiinflamatorios,Jarabe/Suspensión,50mg/5ml,47.5,0.33,B,0.048,5,90,30,True,True,PROV-8,71.18,2025-10-23
+MED014,Naproxeno,Naproxeno sódico,M01AE02,Antiinflamatorios,Tabletas,250mg,85.0,0.35,B,0.04,4,120,50,True,False,PROV-10,62.04,2025-10-23
+MED015,Amoxicilina,Amoxicilina,J01CA04,Antibióticos β-lactámicos,Cápsulas,500mg,80.0,0.4,A,0.05,5,120,50,True,True,PROV-3,68.35,2025-10-23
+MED016,Amoxicilina Jarabe,Amoxicilina,J01CA04,Antibióticos β-lactámicos,Jarabe/Suspensión,500mg/5ml,40.0,0.44000000000000006,B,0.06,6,72,30,True,True,PROV-2,56.64,2025-10-23
+MED017,Amoxicilina + Clavulánico,Amoxicilina + Ácido clavulánico,J01CR02,Antibióticos β-lactámicos,Tabletas,875mg + 125mg,70.0,0.4,B,0.05,5,100,30,True,True,PROV-9,56.36,2025-10-23
+MED018,Azitromicina,Azitromicina,J01FA10,Antibióticos macrólidos,Tabletas,500mg,60.0,0.45,B,0.06,6,80,30,True,True,PROV-2,78.73,2025-10-23
+MED019,Azitromicina Jarabe,Azitromicina,J01FA10,Antibióticos macrólidos,Jarabe/Suspensión,500mg/5ml,30.0,0.49500000000000005,C,0.072,7,48,18,True,True,PROV-3,63.31,2025-10-23
+MED020,Ciprofloxacino,Ciprofloxacino,J01MA02,Antibióticos fluoroquinolonas,Tabletas,500mg,65.0,0.35,B,0.05,5,90,30,True,True,PROV-5,48.83,2025-10-23
+MED021,Ciprofloxacino Genérico,Ciprofloxacino,J01MA02,Antibióticos fluoroquinolonas,Tabletas,500mg,45.5,0.315,B,0.04000000000000001,5,62,21,True,True,PROV-8,50.13,2025-10-23
+MED022,Loratadina,Loratadina,R06AE07,Antihistamínicos,Tabletas,10mg,70.0,0.3,B,0.03,4,100,50,True,False,PROV-8,53.54,2025-10-23
+MED023,Cetirizina,Cetirizina,R06AE07,Antihistamínicos,Tabletas,10mg,75.0,0.3,B,0.03,4,110,50,True,False,PROV-9,55.32,2025-10-23
+MED024,Dextrometorfano,Dextrometorfano HBr,R05DA09,Antitusivos,Jarabe,15mg/5ml,55.0,0.4,B,0.05,5,70,30,True,False,PROV-4,34.16,2025-10-23
+MED025,Dextrometorfano Jarabe,Dextrometorfano HBr,R05DA09,Antitusivos,Jarabe/Suspensión,15mg/5ml/5ml,27.5,0.44000000000000006,C,0.06,6,42,18,True,False,PROV-4,46.18,2025-10-23
+MED026,Dextrometorfano HBr Genérico,Dextrometorfano HBr,R05DA09,Antitusivos,Jarabe,15mg/5ml,38.5,0.36000000000000004,B,0.04000000000000001,5,49,21,True,False,PROV-5,46.87,2025-10-23
+MED027,Omeprazol,Omeprazol,A02BC01,Inhibidores bomba protones,Cápsulas,20mg,90.0,0.25,A,0.03,4,130,50,True,False,PROV-2,52.32,2025-10-23
+MED028,Omeprazol Jarabe,Omeprazol,A02BC01,Inhibidores bomba protones,Jarabe/Suspensión,20mg/5ml,45.0,0.275,B,0.036,5,78,30,True,False,PROV-9,40.04,2025-10-23
+MED029,Ranitidina,Ranitidina,A02BA02,Antagonistas H2,Tabletas,150mg,70.0,0.25,B,0.03,4,100,50,True,False,PROV-8,80.87,2025-10-23
+MED030,Metoclopramida,Metoclopramida,A03FA01,Antieméticos,Tabletas,10mg,60.0,0.3,B,0.04,4,80,50,True,False,PROV-10,45.78,2025-10-23
+MED031,Metoclopramida Jarabe,Metoclopramida,A03FA01,Antieméticos,Jarabe/Suspensión,10mg/5ml,30.0,0.33,C,0.048,5,48,30,True,False,PROV-7,26.52,2025-10-23
+MED032,Loperamida,Loperamida,A07DA03,Antidiarreicos,Cápsulas,2mg,50.0,0.45,C,0.05,5,60,30,True,False,PROV-4,52.03,2025-10-23
+MED033,Enalapril,Enalapril maleato,C09AA02,IECA,Tabletas,10mg,110.0,0.15,A,0.02,4,180,100,True,True,PROV-10,104.35,2025-10-23
+MED034,Enalapril Jarabe,Enalapril maleato,C09AA02,IECA,Jarabe/Suspensión,10mg/5ml,55.0,0.165,B,0.024,5,108,60,True,True,PROV-3,43.39,2025-10-23
+MED035,Losartán,Losartán potásico,C09CA01,ARA-II,Tabletas,50mg,105.0,0.15,A,0.02,4,170,100,True,True,PROV-8,87.75,2025-10-23
+MED036,Losartán potásico Genérico,Losartán potásico,C09CA01,ARA-II,Tabletas,50mg,73.5,0.135,A,0.016,4,118,70,True,True,PROV-1,76.02,2025-10-23
+MED037,Atorvastatina,Atorvastatina,C10AA05,Estatinas,Tabletas,20mg,85.0,0.2,B,0.03,5,120,50,True,True,PROV-2,58.19,2025-10-23
+MED038,Simvastatina,Simvastatina,C10AA01,Estatinas,Tabletas,20mg,95.0,0.2,A,0.02,4,140,50,True,True,PROV-9,85.27,2025-10-23
+MED039,Aspirina,Ácido acetilsalicílico,B01AC06,Antiagregantes,Tabletas,100mg,100.0,0.2,A,0.02,3,150,100,True,False,PROV-5,71.55,2025-10-23
+MED040,Aspirina Jarabe,Ácido acetilsalicílico,B01AC06,Antiagregantes,Jarabe/Suspensión,100mg/5ml,50.0,0.22000000000000003,B,0.024,4,90,60,True,False,PROV-5,58.45,2025-10-23
+MED041,Ácido acetilsalicílico Genérico,Ácido acetilsalicílico,B01AC06,Antiagregantes,Tabletas,100mg,70.0,0.18000000000000002,A,0.016,3,105,70,True,False,PROV-7,68.51,2025-10-23
+MED042,Metformina,Metformina HCl,A10BA02,Antidiabéticos orales,Tabletas,850mg,130.0,0.15,A,0.02,4,200,100,True,True,PROV-3,94.11,2025-10-23
+MED043,Metformina Jarabe,Metformina HCl,A10BA02,Antidiabéticos orales,Jarabe/Suspensión,850mg/5ml,65.0,0.165,B,0.024,5,120,60,True,True,PROV-5,41.56,2025-10-23
+MED044,Glibenclamida,Glibenclamida,A10BB01,Antidiabéticos orales,Tabletas,5mg,90.0,0.2,A,0.03,5,130,50,True,True,PROV-5,87.59,2025-10-23
+MED045,Vitamina B12,Cianocobalamina,A11EA,Vitaminas,Tabletas,1000mcg,65.0,0.25,B,0.03,5,90,50,False,False,PROV-6,51.94,2025-10-23
+MED046,Vitamina B12 Jarabe,Cianocobalamina,A11EA,Vitaminas,Jarabe/Suspensión,1000mcg/5ml,32.5,0.275,C,0.036,6,54,30,False,False,PROV-6,29.64,2025-10-23
+MED047,Vitamina D,Colecalciferol,A11CC05,Vitaminas,Cápsulas,2000 UI,75.0,0.2,B,0.03,5,100,50,False,False,PROV-3,44.33,2025-10-23
+MED048,Complejo B,Vitaminas del complejo B,A11EA,Vitaminas,Tabletas,Multivitamínico,70.0,0.25,B,0.03,5,95,50,False,False,PROV-5,66.59,2025-10-23
+MED049,Complejo B Jarabe,Vitaminas del complejo B,A11EA,Vitaminas,Jarabe/Suspensión,Multivitamínico/5ml,35.0,0.275,C,0.036,6,57,30,False,False,PROV-3,52.99,2025-10-23
+MED050,Calcio + Vitamina D,Carbonato de calcio + Colecalciferol,A12AX,Minerales + Vitaminas,Tabletas,600mg + 400 UI,80.0,0.2,B,0.03,5,110,50,False,False,PROV-7,45.75,2025-10-23
+MED051,Carbonato de calcio + Colecalciferol Genérico,Carbonato de calcio + Colecalciferol,A12AX,Minerales + Vitaminas,Tabletas,600mg + 400 UI,56.0,0.18000000000000002,B,0.024,5,77,35,False,False,PROV-5,56.04,2025-10-23
+MED052,Salbutamol,Salbutamol,R03AC02,Broncodilatadores,Inhalador,100mcg/dosis,55.0,0.3,B,0.04,6,70,30,True,True,PROV-3,42.69,2025-10-23
+MED053,Prednisona,Prednisona,H02AB06,Corticosteroides,Tabletas,5mg,50.0,0.3,B,0.05,5,65,30,True,True,PROV-9,59.03,2025-10-23
+MED054,Tramadol,Tramadol HCl,N02AX02,Analgésicos opioides,Cápsulas,50mg,45.0,0.25,C,0.04,6,50,30,True,True,PROV-1,35.35,2025-10-23
+MED055,Tramadol Jarabe,Tramadol HCl,N02AX02,Analgésicos opioides,Jarabe/Suspensión,50mg/5ml,22.5,0.275,C,0.048,7,30,18,True,True,PROV-9,47.34,2025-10-23
+MED056,Tramadol HCl Genérico,Tramadol HCl,N02AX02,Analgésicos opioides,Cápsulas,50mg,31.499999999999996,0.225,C,0.032,6,35,21,True,True,PROV-3,38.15,2025-10-23
+MED057,Diazepam,Diazepam,N05BA01,Ansiolíticos,Tabletas,5mg,40.0,0.2,C,0.03,6,50,30,True,True,PROV-5,67.15,2025-10-23
+MED058,Diazepam Jarabe,Diazepam,N05BA01,Ansiolíticos,Jarabe/Suspensión,5mg/5ml,20.0,0.22000000000000003,C,0.036,7,30,18,True,True,PROV-2,21.19,2025-10-23
+MED059,Clonazepam,Clonazepam,N03AE01,Ansiolíticos,Tabletas,2mg,50.0,0.2,C,0.03,6,60,30,True,True,PROV-2,45.35,2025-10-23
+MED060,Simvastatina V2,Simvastatina,C10AA01,Estatinas,Tabletas,20mg,87.84878677429967,0.2,B,0.02,4,177,50,True,True,PROV-3,54.03,2025-10-23
+MED061,Aspirina V2,Ácido acetilsalicílico,B01AC06,Antiagregantes,Tabletas,100mg,113.9196365086843,0.2,B,0.02,3,158,100,True,False,PROV-7,103.57,2025-10-23
+MED062,Metformina V2,Metformina HCl,A10BA02,Antidiabéticos orales,Tabletas,850mg,103.16945395451003,0.15,B,0.02,4,158,100,True,True,PROV-5,96.06,2025-10-23
+MED063,Glibenclamida V2,Glibenclamida,A10BB01,Antidiabéticos orales,Tabletas,5mg,66.13651505708278,0.2,B,0.03,5,158,50,True,True,PROV-7,49.68,2025-10-23
+MED064,Vitamina B12 V2,Cianocobalamina,A11EA,Vitaminas,Tabletas,1000mcg,68.94348545798515,0.25,B,0.03,5,101,50,False,False,PROV-10,69.17,2025-10-23
+MED065,Vitamina D V2,Colecalciferol,A11CC05,Vitaminas,Cápsulas,2000 UI,53.426302243311106,0.2,B,0.03,5,128,50,False,False,PROV-3,68.49,2025-10-23
+MED066,Complejo B V2,Vitaminas del complejo B,A11EA,Vitaminas,Tabletas,Multivitamínico,83.96259091361772,0.25,B,0.03,5,78,50,False,False,PROV-5,71.97,2025-10-23
+MED067,Calcio + Vitamina D V2,Carbonato de calcio + Colecalciferol,A12AX,Minerales + Vitaminas,Tabletas,600mg + 400 UI,64.72759842594083,0.2,B,0.03,5,89,50,False,False,PROV-9,61.2,2025-10-23
+MED068,Salbutamol V2,Salbutamol,R03AC02,Broncodilatadores,Inhalador,100mcg/dosis,48.539994017664746,0.3,B,0.04,6,71,30,True,True,PROV-3,40.15,2025-10-23
+MED069,Prednisona V2,Prednisona,H02AB06,Corticosteroides,Tabletas,5mg,47.95835055926347,0.3,B,0.05,5,56,30,True,True,PROV-7,33.17,2025-10-23
+MED070,Tramadol V2,Tramadol HCl,N02AX02,Analgésicos opioides,Cápsulas,50mg,48.02002815750425,0.25,B,0.04,6,39,30,True,True,PROV-10,69.38,2025-10-23
+MED071,Diazepam V2,Diazepam,N05BA01,Ansiolíticos,Tabletas,5mg,35.01147156484524,0.2,B,0.03,6,45,30,True,True,PROV-5,63.02,2025-10-23
+MED072,Clonazepam V2,Clonazepam,N03AE01,Ansiolíticos,Tabletas,2mg,48.682099526511074,0.2,B,0.03,6,70,30,True,True,PROV-1,57.83,2025-10-23
+MED073,Sudagrip V3,Paracetamol + Clorfenamina + Fenilefrina,R05X,Antigripales,Tabletas,500mg + 2mg + 5mg,77.8814055830265,0.5,B,0.08,5,151,50,True,False,PROV-3,59.2,2025-10-23
+MED074,Histadril V3,Difenhidramina,R06AA02,Antihistamínicos,Tabletas,50mg,73.88141189220579,0.45,B,0.08,4,72,50,True,False,PROV-7,57.66,2025-10-23
+MED075,Acetaminofén MK V3,Paracetamol,N02BE01,Analgésicos,Tabletas,500mg,149.03376755972084,0.35,B,0.05,3,160,100,True,False,PROV-8,112.18,2025-10-23
+MED076,Sertal Compuesto V3,Papaverina + Hioscina,A03FA01,Antiespasmódicos,Tabletas,30mg + 10mg,48.03701212642589,0.4,B,0.06,5,126,50,True,False,PROV-9,69.39,2025-10-23
+MED077,NAN Optipro V3,Fórmula infantil,V06DZ99,Nutrición infantil,Polvo,900g,140.7317141829209,0.3,B,0.04,7,177,30,True,False,PROV-8,115.28,2025-10-23
+MED078,Paracetamol V3,Paracetamol,N02BE01,Analgésicos,Tabletas,500mg,132.41523922560336,0.3,B,0.03,3,189,100,True,False,PROV-8,106.3,2025-10-23
+MED079,Ibuprofeno V3,Ibuprofeno,M01AE01,Antiinflamatorios,Tabletas,400mg,133.2647779088753,0.35,B,0.03,3,192,100,True,False,PROV-6,100.52,2025-10-23
+MED080,Diclofenaco V3,Diclofenaco sódico,M01AB05,Antiinflamatorios,Tabletas,50mg,73.45617938615239,0.3,B,0.04,4,149,50,True,True,PROV-9,45.51,2025-10-23
+MED081,Naproxeno V3,Naproxeno sódico,M01AE02,Antiinflamatorios,Tabletas,250mg,61.25381457687613,0.35,B,0.04,4,149,50,True,False,PROV-1,42.9,2025-10-23
+MED082,Amoxicilina V3,Amoxicilina,J01CA04,Antibióticos β-lactámicos,Cápsulas,500mg,68.42143911680081,0.4,B,0.05,5,131,50,True,True,PROV-4,79.65,2025-10-23
+MED083,Amoxicilina + Clavulánico V3,Amoxicilina + Ácido clavulánico,J01CR02,Antibióticos β-lactámicos,Tabletas,875mg + 125mg,62.091865195755254,0.4,B,0.05,5,101,30,True,True,PROV-5,63.34,2025-10-23
+MED084,Azitromicina V3,Azitromicina,J01FA10,Antibióticos macrólidos,Tabletas,500mg,61.68157005635806,0.45,B,0.06,6,64,30,True,True,PROV-9,36.25,2025-10-23
+MED085,Ciprofloxacino V3,Ciprofloxacino,J01MA02,Antibióticos fluoroquinolonas,Tabletas,500mg,83.31380048281778,0.35,B,0.05,5,104,30,True,True,PROV-3,51.22,2025-10-23
+MED086,Loratadina V3,Loratadina,R06AE07,Antihistamínicos,Tabletas,10mg,88.45895554569594,0.3,B,0.03,4,123,50,True,False,PROV-5,79.09,2025-10-23
+MED087,Cetirizina V3,Cetirizina,R06AE07,Antihistamínicos,Tabletas,10mg,79.40549904649882,0.3,B,0.03,4,137,50,True,False,PROV-9,44.93,2025-10-23
+MED088,Dextrometorfano V3,Dextrometorfano HBr,R05DA09,Antitusivos,Jarabe,15mg/5ml,41.42025256771334,0.4,B,0.05,5,57,30,True,False,PROV-1,32.95,2025-10-23
+MED089,Omeprazol V3,Omeprazol,A02BC01,Inhibidores bomba protones,Cápsulas,20mg,65.44227360116905,0.25,B,0.03,4,116,50,True,False,PROV-7,62.41,2025-10-23
+MED090,Ranitidina V3,Ranitidina,A02BA02,Antagonistas H2,Tabletas,150mg,65.32444616695824,0.25,B,0.03,4,86,50,True,False,PROV-3,68.8,2025-10-23
+MED091,Metoclopramida V3,Metoclopramida,A03FA01,Antieméticos,Tabletas,10mg,71.83455032946945,0.3,C,0.04,4,73,50,True,False,PROV-2,70.26,2025-10-23
+MED092,Loperamida V3,Loperamida,A07DA03,Antidiarreicos,Cápsulas,2mg,43.428035290621416,0.45,C,0.05,5,61,30,True,False,PROV-1,36.81,2025-10-23
+MED093,Enalapril V3,Enalapril maleato,C09AA02,IECA,Tabletas,10mg,86.30099884833433,0.15,C,0.02,4,212,100,True,True,PROV-4,80.2,2025-10-23
+MED094,Losartán V3,Losartán potásico,C09CA01,ARA-II,Tabletas,50mg,78.19669055182555,0.15,C,0.02,4,219,100,True,True,PROV-6,54.77,2025-10-23
+MED095,Atorvastatina V3,Atorvastatina,C10AA05,Estatinas,Tabletas,20mg,98.88448323412953,0.2,C,0.03,5,98,50,True,True,PROV-4,69.09,2025-10-23
+MED096,Simvastatina V3,Simvastatina,C10AA01,Estatinas,Tabletas,20mg,66.81476067604532,0.2,C,0.02,4,166,50,True,True,PROV-1,72.0,2025-10-23
+MED097,Aspirina V3,Ácido acetilsalicílico,B01AC06,Antiagregantes,Tabletas,100mg,112.41144063085702,0.2,C,0.02,3,170,100,True,False,PROV-4,90.44,2025-10-23
+MED098,Metformina V3,Metformina HCl,A10BA02,Antidiabéticos orales,Tabletas,850mg,151.15908704150377,0.15,C,0.02,4,148,100,True,True,PROV-2,118.79,2025-10-23
+MED099,Glibenclamida V3,Glibenclamida,A10BB01,Antidiabéticos orales,Tabletas,5mg,82.35714934139071,0.2,C,0.03,5,100,50,True,True,PROV-10,75.77,2025-10-23
+MED100,Vitamina B12 V3,Cianocobalamina,A11EA,Vitaminas,Tabletas,1000mcg,79.16103360914815,0.25,C,0.03,5,96,50,False,False,PROV-5,70.15,2025-10-23
+MED101,Vitamina D V3,Colecalciferol,A11CC05,Vitaminas,Cápsulas,2000 UI,67.39041111836922,0.2,C,0.03,5,73,50,False,False,PROV-8,42.91,2025-10-23
+MED102,Complejo B V3,Vitaminas del complejo B,A11EA,Vitaminas,Tabletas,Multivitamínico,62.061257512057814,0.25,C,0.03,5,85,50,False,False,PROV-3,52.58,2025-10-23
+MED103,Calcio + Vitamina D V3,Carbonato de calcio + Colecalciferol,A12AX,Minerales + Vitaminas,Tabletas,600mg + 400 UI,91.02109656022706,0.2,C,0.03,5,119,50,False,False,PROV-8,62.44,2025-10-23
+MED104,Salbutamol V3,Salbutamol,R03AC02,Broncodilatadores,Inhalador,100mcg/dosis,67.77802050501877,0.3,C,0.04,6,68,30,True,True,PROV-9,49.87,2025-10-23
+MED105,Prednisona V3,Prednisona,H02AB06,Corticosteroides,Tabletas,5mg,38.58782737814905,0.3,C,0.05,5,73,30,True,True,PROV-10,68.08,2025-10-23
+MED106,Tramadol V3,Tramadol HCl,N02AX02,Analgésicos opioides,Cápsulas,50mg,52.041196312656226,0.25,C,0.04,6,51,30,True,True,PROV-10,48.71,2025-10-23
+MED107,Diazepam V3,Diazepam,N05BA01,Ansiolíticos,Tabletas,5mg,46.50321231890946,0.2,C,0.03,6,49,30,True,True,PROV-1,68.39,2025-10-23
+MED108,Clonazepam V3,Clonazepam,N03AE01,Ansiolíticos,Tabletas,2mg,50.68198488145982,0.2,C,0.03,6,57,30,True,True,PROV-3,58.74,2025-10-23
+MED109,Sudagrip V4,Paracetamol + Clorfenamina + Fenilefrina,R05X,Antigripales,Tabletas,500mg + 2mg + 5mg,67.94889022441343,0.5,C,0.08,5,114,50,True,False,PROV-8,74.74,2025-10-23
+MED110,Histadril V4,Difenhidramina,R06AA02,Antihistamínicos,Tabletas,50mg,50.320025798842835,0.45,C,0.08,4,108,50,True,False,PROV-7,52.78,2025-10-23
+MED111,Acetaminofén MK V4,Paracetamol,N02BE01,Analgésicos,Tabletas,500mg,124.40590241041144,0.35,C,0.05,3,201,100,True,False,PROV-5,93.16,2025-10-23
+MED112,Sertal Compuesto V4,Papaverina + Hioscina,A03FA01,Antiespasmódicos,Tabletas,30mg + 10mg,80.89509248311764,0.4,C,0.06,5,84,50,True,False,PROV-3,67.61,2025-10-23
+MED113,NAN Optipro V4,Fórmula infantil,V06DZ99,Nutrición infantil,Polvo,900g,104.08527292035156,0.3,C,0.04,7,172,30,True,False,PROV-2,65.83,2025-10-23
+MED114,Paracetamol V4,Paracetamol,N02BE01,Analgésicos,Tabletas,500mg,125.59183489424602,0.3,C,0.03,3,186,100,True,False,PROV-1,100.31,2025-10-23
+MED115,Ibuprofeno V4,Ibuprofeno,M01AE01,Antiinflamatorios,Tabletas,400mg,104.86210460979129,0.35,C,0.03,3,159,100,True,False,PROV-10,70.07,2025-10-23
+MED116,Diclofenaco V4,Diclofenaco sódico,M01AB05,Antiinflamatorios,Tabletas,50mg,119.49276618352665,0.3,C,0.04,4,177,50,True,True,PROV-1,65.84,2025-10-23
+MED117,Naproxeno V4,Naproxeno sódico,M01AE02,Antiinflamatorios,Tabletas,250mg,91.80359158203159,0.35,C,0.04,4,146,50,True,False,PROV-6,79.95,2025-10-23
+MED118,Amoxicilina V4,Amoxicilina,J01CA04,Antibióticos β-lactámicos,Cápsulas,500mg,94.5762596911575,0.4,C,0.05,5,97,50,True,True,PROV-5,60.26,2025-10-23
+MED119,Amoxicilina + Clavulánico V4,Amoxicilina + Ácido clavulánico,J01CR02,Antibióticos β-lactámicos,Tabletas,875mg + 125mg,86.48747793657905,0.4,C,0.05,5,102,30,True,True,PROV-9,90.56,2025-10-23
+MED120,Azitromicina V4,Azitromicina,J01FA10,Antibióticos macrólidos,Tabletas,500mg,71.06784558590626,0.45,C,0.06,6,99,30,True,True,PROV-8,83.46,2025-10-23

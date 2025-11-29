@@ -1,0 +1,65 @@
+======================================================================
+REPORTE DE UTILIDAD DE ALERTAS
+Sistema: Farmacias Siman - Alertas Predictivas
+======================================================================
+
+RESUMEN EJECUTIVO
+------------------------------
+Total de alertas evaluadas: 240
+Alertas accionables: 172 (71.7%)
+Alertas no accionables: 68
+
+CUMPLIMIENTO DE CRITERIOS
+------------------------------
+Sufficient Lead Time: 89.2%
+Below Safety Threshold: 77.9%
+Minimum Confidence: 100.0%
+Actionable Quantity: 100.0%
+
+ANÁLISIS DE RIESGO
+------------------------------
+Días promedio hasta stockout: 8.6
+Score promedio de urgencia: 0.74
+
+Distribución por nivel de riesgo:
+  MEDIUM: 131 alertas (54.6%)
+  HIGH: 109 alertas (45.4%)
+
+MÉTRICAS OPERACIONALES
+------------------------------
+Cantidad promedio recomendada: 96.1 unidades
+Total recomendado a ordenar: 23072 unidades
+
+DISTRIBUCIÓN POR CATEGORÍA ATC
+------------------------------
+Antiinflamatorios: 24 alertas (10.0%)
+Vitaminas: 22 alertas (9.2%)
+Antibióticos β-lactámicos: 14 alertas (5.8%)
+Analgésicos: 14 alertas (5.8%)
+Antihistamínicos: 14 alertas (5.8%)
+Antidiabéticos orales: 14 alertas (5.8%)
+Ansiolíticos: 14 alertas (5.8%)
+Estatinas: 10 alertas (4.2%)
+Antiagregantes: 10 alertas (4.2%)
+Analgésicos opioides: 10 alertas (4.2%)
+Antibióticos macrólidos: 8 alertas (3.3%)
+Minerales + Vitaminas: 8 alertas (3.3%)
+Antiespasmódicos: 8 alertas (3.3%)
+Antitusivos: 8 alertas (3.3%)
+Antibióticos fluoroquinolonas: 6 alertas (2.5%)
+Antigripales: 6 alertas (2.5%)
+Nutrición infantil: 6 alertas (2.5%)
+Inhibidores bomba protones: 6 alertas (2.5%)
+Antieméticos: 6 alertas (2.5%)
+IECA: 6 alertas (2.5%)
+ARA-II: 6 alertas (2.5%)
+Corticosteroides: 6 alertas (2.5%)
+Broncodilatadores: 6 alertas (2.5%)
+Antidiarreicos: 4 alertas (1.7%)
+Antagonistas H2: 4 alertas (1.7%)
+
+RECOMENDACIONES
+---------------
+⚠ Sistema funcional - Revisar criterios para optimización
+
+======================================================================
