@@ -1,14 +1,15 @@
 """
 Endpoints para Ventas Diarias
-Acceso a los 10,800 registros históricos (120 SKUs × 90 días)
-Período: 2025-08-02 a 2025-10-30
+Versión 2.1 - SaaS Genérico con Cálculo Dinámico
+
+PRINCIPIO: Todas las estadísticas se calculan dinámicamente de los datos.
+El sistema escala automáticamente según el número de SKUs y registros.
 """
 
 from fastapi import APIRouter, HTTPException, Query, Path
 from typing import Optional
 from datetime import date, datetime, timedelta
 from app.database import supabase_client
-from app.config import settings
 import logging
 
 router = APIRouter()
@@ -25,7 +26,9 @@ async def listar_ventas(
     offset: int = Query(0, ge=0, description="Offset para paginación")
 ):
     """
-    Lista ventas diarias con filtros
+    Lista ventas diarias con filtros.
+    
+    El período de datos se calcula dinámicamente de los datos cargados.
     
     Args:
         sku: Filtrar por SKU específico
@@ -36,7 +39,7 @@ async def listar_ventas(
         offset: Offset para paginación
         
     Returns:
-        dict: Lista de ventas con paginación
+        dict: Lista de ventas con paginación y período calculado
     """
     try:
         query = supabase_client.table('ventas_diarias').select('*')
@@ -69,6 +72,19 @@ async def listar_ventas(
             
         count_result = count_query.execute()
         
+        # Calcular período dinámicamente
+        fechas_query = supabase_client.table('ventas_diarias').select('fecha').execute()
+        if fechas_query.data:
+            todas_fechas = [f['fecha'] for f in fechas_query.data]
+            fecha_min = min(todas_fechas)
+            fecha_max = max(todas_fechas)
+            total_dias = (datetime.fromisoformat(fecha_max.replace('Z', '')) - 
+                         datetime.fromisoformat(fecha_min.replace('Z', ''))).days + 1
+        else:
+            fecha_min = None
+            fecha_max = None
+            total_dias = 0
+        
         return {
             "success": True,
             "data": {
@@ -77,10 +93,13 @@ async def listar_ventas(
                 "limit": limit,
                 "offset": offset,
                 "periodo": {
-                    "inicio": settings.PERIODO_INICIO,
-                    "fin": settings.PERIODO_FIN,
-                    "total_dias": settings.TOTAL_DIAS
+                    "inicio": fecha_min,
+                    "fin": fecha_max,
+                    "total_dias": total_dias
                 }
+            },
+            "meta": {
+                "nota": "Período calculado dinámicamente de los datos"
             }
         }
         
@@ -92,26 +111,29 @@ async def listar_ventas(
 @router.get("/estadisticas")
 async def obtener_estadisticas_ventas():
     """
-    Obtiene estadísticas generales de ventas
+    Obtiene estadísticas generales de ventas.
+    
+    TODAS las métricas se calculan dinámicamente de los datos cargados.
+    No hay valores "esperados" hardcodeados - el sistema se adapta a cualquier dataset.
     
     Returns:
         dict: Estadísticas consolidadas del histórico de ventas
     """
     try:
-        # Total registros
+        # Total registros (calculado dinámicamente)
         total = supabase_client.table('ventas_diarias').select('count', count='exact').execute()
         
-        # Registros con demanda cero
+        # Registros con demanda cero (calculado dinámicamente)
         demanda_cero = supabase_client.table('ventas_diarias') \
             .select('count', count='exact') \
             .eq('demanda', 0) \
             .execute()
         
-        # SKUs únicos
+        # SKUs únicos (calculado dinámicamente)
         skus = supabase_client.table('ventas_diarias').select('sku').execute()
-        skus_unicos = len(set(v['sku'] for v in skus.data))
+        skus_unicos = len(set(v['sku'] for v in skus.data)) if skus.data else 0
         
-        # Rango de fechas
+        # Rango de fechas (calculado dinámicamente)
         fechas = supabase_client.table('ventas_diarias') \
             .select('fecha') \
             .order('fecha') \
@@ -126,23 +148,36 @@ async def obtener_estadisticas_ventas():
             .execute()
         fecha_max = fechas_max.data[0]['fecha'] if fechas_max.data else None
         
+        # Calcular días del período
+        if fecha_min and fecha_max:
+            dias_periodo = (
+                datetime.fromisoformat(fecha_max.replace('Z', '')) - 
+                datetime.fromisoformat(fecha_min.replace('Z', ''))
+            ).days + 1
+        else:
+            dias_periodo = 0
+        
+        # Calcular registros esperados (SKUs × días)
+        registros_esperados = skus_unicos * dias_periodo if skus_unicos > 0 and dias_periodo > 0 else 0
+        
         return {
             "success": True,
             "data": {
                 "total_registros": total.count,
-                "registros_esperados": settings.TOTAL_REGISTROS_VENTAS,
-                "cobertura_pct": round((total.count / settings.TOTAL_REGISTROS_VENTAS) * 100, 1),
+                "registros_esperados": registros_esperados,
+                "cobertura_pct": round((total.count / registros_esperados) * 100, 1) if registros_esperados > 0 else 100.0,
                 "demandas_cero": demanda_cero.count,
                 "demandas_cero_pct": round((demanda_cero.count / total.count) * 100, 2) if total.count > 0 else 0,
-                "demandas_cero_esperadas": settings.DEMANDAS_CERO,
                 "skus_unicos": skus_unicos,
-                "skus_esperados": settings.TOTAL_SKUS,
                 "periodo": {
                     "fecha_inicio": fecha_min,
                     "fecha_fin": fecha_max,
-                    "fecha_inicio_esperada": settings.PERIODO_INICIO,
-                    "fecha_fin_esperada": settings.PERIODO_FIN
+                    "total_dias": dias_periodo
                 }
+            },
+            "meta": {
+                "nota": "TODAS las métricas calculadas dinámicamente de los datos",
+                "principio": "CÁLCULO DINÁMICO - CERO HARDCODEO"
             }
         }
         
@@ -154,7 +189,7 @@ async def obtener_estadisticas_ventas():
 @router.get("/por-sku/{sku}")
 async def obtener_ventas_por_sku(
     sku: str = Path(..., description="SKU del medicamento"),
-    dias: int = Query(90, ge=7, le=90, description="Días de histórico")
+    dias: int = Query(90, ge=7, le=365, description="Días de histórico")
 ):
     """
     Obtiene histórico de ventas para un SKU específico
@@ -164,7 +199,7 @@ async def obtener_ventas_por_sku(
         dias: Número de días de histórico
         
     Returns:
-        dict: Ventas del SKU con estadísticas
+        dict: Ventas del SKU con estadísticas calculadas
     """
     try:
         # Validar que el SKU existe
@@ -186,16 +221,16 @@ async def obtener_ventas_por_sku(
             .limit(dias) \
             .execute()
         
-        # Calcular estadísticas
+        # Calcular estadísticas dinámicamente
         demandas = [v['demanda'] for v in result.data]
         
         estadisticas = {
             "total_registros": len(demandas),
-            "demanda_total": sum(demandas),
+            "demanda_total": sum(demandas) if demandas else 0,
             "demanda_promedio": round(sum(demandas) / len(demandas), 2) if demandas else 0,
             "demanda_maxima": max(demandas) if demandas else 0,
             "demanda_minima": min(demandas) if demandas else 0,
-            "dias_sin_demanda": demandas.count(0)
+            "dias_sin_demanda": demandas.count(0) if demandas else 0
         }
         
         return {
@@ -217,7 +252,7 @@ async def obtener_ventas_por_sku(
 
 @router.get("/tendencia-demanda")
 async def obtener_tendencia_demanda(
-    dias: int = Query(30, ge=7, le=90, description="Días de histórico"),
+    dias: int = Query(30, ge=7, le=365, description="Días de histórico"),
     sku: Optional[str] = Query(None, description="Filtrar por SKU específico")
 ):
     """
@@ -245,18 +280,19 @@ async def obtener_tendencia_demanda(
         # Agregar por fecha
         por_fecha = {}
         for venta in result.data:
-            fecha = venta['fecha']
-            if fecha not in por_fecha:
-                por_fecha[fecha] = {'demanda_total': 0, 'registros': 0}
-            por_fecha[fecha]['demanda_total'] += venta['demanda']
-            por_fecha[fecha]['registros'] += 1
+            fecha = venta['fecha'][:10] if venta['fecha'] else None  # Solo YYYY-MM-DD
+            if fecha:
+                if fecha not in por_fecha:
+                    por_fecha[fecha] = {'demanda_total': 0, 'registros': 0}
+                por_fecha[fecha]['demanda_total'] += venta['demanda']
+                por_fecha[fecha]['registros'] += 1
         
         # Convertir a lista ordenada
         tendencia = [
             {
                 "fecha": fecha,
                 "demanda_total": datos['demanda_total'],
-                "demanda_promedio": round(datos['demanda_total'] / datos['registros'], 2)
+                "demanda_promedio": round(datos['demanda_total'] / datos['registros'], 2) if datos['registros'] > 0 else 0
             }
             for fecha, datos in sorted(por_fecha.items())
         ]
@@ -266,7 +302,8 @@ async def obtener_tendencia_demanda(
             "data": {
                 "tendencia": tendencia,
                 "dias": dias,
-                "sku_filtro": sku
+                "sku_filtro": sku,
+                "total_puntos": len(tendencia)
             }
         }
         
@@ -277,8 +314,8 @@ async def obtener_tendencia_demanda(
 
 @router.get("/top-demanda")
 async def obtener_top_demanda(
-    dias: int = Query(30, ge=7, le=90, description="Días de histórico"),
-    limit: int = Query(10, ge=1, le=50, description="Cantidad de SKUs")
+    dias: int = Query(30, ge=7, le=365, description="Días de histórico"),
+    limit: int = Query(10, ge=1, le=100, description="Cantidad de SKUs")
 ):
     """
     Obtiene SKUs con mayor demanda en el período
@@ -288,7 +325,7 @@ async def obtener_top_demanda(
         limit: Cantidad de SKUs a retornar
         
     Returns:
-        dict: Top SKUs por demanda total
+        dict: Top SKUs por demanda total (calculado dinámicamente)
     """
     try:
         fecha_inicio = (date.today() - timedelta(days=dias)).isoformat()
@@ -312,12 +349,15 @@ async def obtener_top_demanda(
         
         # Obtener nombres de medicamentos
         skus_list = [sku for sku, _ in top_skus]
-        medicamentos = supabase_client.table('catalogo_medicamentos') \
-            .select('sku, nombre_comercial, categoria_abc, es_esencial') \
-            .in_('sku', skus_list) \
-            .execute()
-        
-        med_dict = {m['sku']: m for m in medicamentos.data}
+        if skus_list:
+            medicamentos = supabase_client.table('catalogo_medicamentos') \
+                .select('sku, nombre_comercial, categoria_abc, es_esencial') \
+                .in_('sku', skus_list) \
+                .execute()
+            
+            med_dict = {m['sku']: m for m in medicamentos.data}
+        else:
+            med_dict = {}
         
         resultado = [
             {
@@ -335,7 +375,10 @@ async def obtener_top_demanda(
             "data": {
                 "top_demanda": resultado,
                 "dias": dias,
-                "total_skus": len(por_sku)
+                "total_skus_analizados": len(por_sku)
+            },
+            "meta": {
+                "nota": "Ranking calculado dinámicamente de los datos"
             }
         }
         

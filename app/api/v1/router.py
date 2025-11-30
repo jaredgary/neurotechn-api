@@ -63,7 +63,7 @@ api_router.include_router(
 
 
 # =====================================================================
-# MEDICAMENTOS (Catálogo - 120 SKUs)
+# MEDICAMENTOS (Catálogo - variable según cliente)
 # =====================================================================
 api_router.include_router(
     medicamentos.router,
@@ -83,7 +83,7 @@ api_router.include_router(
 
 
 # =====================================================================
-# VENTAS DIARIAS (10,800 registros - NUEVO)
+# VENTAS DIARIAS (variable según datos - NUEVO)
 # =====================================================================
 api_router.include_router(
     ventas.router,
@@ -93,7 +93,7 @@ api_router.include_router(
 
 
 # =====================================================================
-# BACKTESTING (OE2 - 360 registros - NUEVO)
+# BACKTESTING (OE2 - variable según SKUs × horizontes)
 # =====================================================================
 api_router.include_router(
     backtest.router,
@@ -103,7 +103,7 @@ api_router.include_router(
 
 
 # =====================================================================
-# EVALUACIÓN DE ALERTAS (OE4 - 240 registros - NUEVO)
+# EVALUACIÓN DE ALERTAS (OE4 - variable según SKUs × horizontes)
 # =====================================================================
 api_router.include_router(
     evaluacion_alertas.router,

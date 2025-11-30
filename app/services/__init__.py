@@ -1,6 +1,10 @@
 """
 Servicios de lógica de negocio
-Sistema de Alertas Predictivas - Farmacias Siman
+Sistema Predictivo de Inventario Farmacéutico - SaaS Genérico
+Versión: 2.1 - Cálculo Dinámico
+
+PRINCIPIO FUNDAMENTAL:
+"CÁLCULO DINÁMICO - CERO HARDCODEO DE MÉTRICAS"
 """
 
 from typing import List, Optional, Dict, Any
@@ -36,14 +40,14 @@ class AlertaService:
             # Insertar alertas en la tabla
             alertas_nuevas = []
             for alerta_data in result.data:
-                dias = alerta_data.get("dias", 14)
+                dias = alerta_data.get("dias", settings.DEFAULT_HORIZON)
                 alerta = {
                     "sku": alerta_data["sku_alerta"],
                     "nivel_riesgo": alerta_data["nivel"],
                     "dias_hasta_stockout": dias,
                     "cantidad_recomendada": alerta_data["cantidad_recomendar"],
                     "fecha_limite_pedido": alerta_data.get("fecha_limite"),
-                    "score_urgencia": round(max(0, min(1, 1.0 - (dias / 14.0))), 3),
+                    "score_urgencia": round(max(0, min(1, 1.0 - (dias / float(settings.DEFAULT_HORIZON)))), 3),
                     "estado": "pendiente"
                 }
                 alertas_nuevas.append(alerta)
@@ -93,18 +97,17 @@ class AlertaService:
         """
         Calcula score de urgencia basado en días hasta stockout
         
-        Score = 1 - (días / horizonte_óptimo)
-        Horizonte óptimo = 14 días (OE2)
+        Score = 1 - (días / horizonte_default)
         
         Args:
             dias_stockout: Días hasta stockout
             
         Returns:
-            float: Score de urgencia (0-1), promedio esperado: 0.74
+            float: Score de urgencia (0-1)
         """
         try:
-            # Fórmula verificada: score = 1 - (días / 14)
-            score = 1.0 - (dias_stockout / settings.HORIZONTE_OPTIMO)
+            # Usar horizonte configurable, no hardcodeado
+            score = 1.0 - (dias_stockout / float(settings.DEFAULT_HORIZON))
             return round(max(0, min(1, score)), 3)
             
         except Exception as e:
@@ -147,44 +150,97 @@ class PrediccionService:
     @staticmethod
     async def obtener_metricas_modelo() -> dict:
         """
-        Obtiene métricas del modelo XGBoost
+        Obtiene métricas del modelo XGBoost CALCULADAS DINÁMICAMENTE.
         
-        Valores verificados (OE2):
-        - MAE promedio: 379.69 unidades
-        - MAPE promedio: 3.85%
-        - Horizonte óptimo: 14 días
+        NO retorna valores hardcodeados - consulta la tabla backtest_results.
         
         Returns:
-            dict: Métricas del modelo
+            dict: Métricas del modelo calculadas de los datos
         """
-        return {
-            "algoritmo": "XGBoost",
-            "scoring": settings.XGBOOST_SCORING,
-            "metricas_promedio": {
-                "mae": settings.XGBOOST_MAE_PROMEDIO,
-                "mape": settings.XGBOOST_MAPE_PROMEDIO,
-                "sesgo": settings.XGBOOST_SESGO_PROMEDIO,
-                "tiempo_entrenamiento": settings.XGBOOST_TIEMPO_ENTRENAMIENTO
-            },
-            "por_horizonte": {
-                "7d": {"mae": settings.XGBOOST_MAE_7D, "mape": settings.XGBOOST_MAPE_7D},
-                "14d": {"mae": settings.XGBOOST_MAE_14D, "mape": settings.XGBOOST_MAPE_14D},
-                "28d": {"mae": settings.XGBOOST_MAE_28D, "mape": settings.XGBOOST_MAPE_28D}
-            },
-            "horizonte_optimo": settings.HORIZONTE_OPTIMO
-        }
+        try:
+            if supabase_client is None:
+                return {"error": "Cliente no disponible"}
+            
+            # Obtener todos los resultados de backtest
+            result = supabase_client.table('backtest_results') \
+                .select('*') \
+                .eq('algorithm', 'XGBoost') \
+                .execute()
+            
+            if not result.data:
+                return {
+                    "success": False,
+                    "error": "No hay resultados de backtesting. Ejecute /api/v1/backtest/ejecutar",
+                    "data": None
+                }
+            
+            # Calcular métricas globales dinámicamente
+            mae_values = [r['mae'] for r in result.data if r.get('mae') is not None]
+            mape_values = [r['mape'] for r in result.data if r.get('mape') is not None]
+            bias_values = [r['bias'] for r in result.data if r.get('bias') is not None]
+            
+            metricas_globales = {
+                "mae_promedio": round(sum(mae_values) / len(mae_values), 2) if mae_values else None,
+                "mape_promedio": round(sum(mape_values) / len(mape_values), 2) if mape_values else None,
+                "sesgo_promedio": round(sum(bias_values) / len(bias_values), 2) if bias_values else None,
+                "total_backtests": len(result.data),
+                "skus_evaluados": len(set(r['sku'] for r in result.data))
+            }
+            
+            # Calcular por horizonte dinámicamente
+            horizontes = {}
+            for r in result.data:
+                h = r.get('horizon')
+                if h not in horizontes:
+                    horizontes[h] = {'mae': [], 'mape': []}
+                if r.get('mae') is not None:
+                    horizontes[h]['mae'].append(r['mae'])
+                if r.get('mape') is not None:
+                    horizontes[h]['mape'].append(r['mape'])
+            
+            por_horizonte = {}
+            for h, vals in sorted(horizontes.items()):
+                por_horizonte[f"{h}d"] = {
+                    "mae": round(sum(vals['mae']) / len(vals['mae']), 2) if vals['mae'] else None,
+                    "mape": round(sum(vals['mape']) / len(vals['mape']), 2) if vals['mape'] else None
+                }
+            
+            # Identificar horizonte óptimo (menor MAE)
+            mejor_horizonte = None
+            menor_mae = float('inf')
+            for h, vals in horizontes.items():
+                if vals['mae']:
+                    mae_prom = sum(vals['mae']) / len(vals['mae'])
+                    if mae_prom < menor_mae:
+                        menor_mae = mae_prom
+                        mejor_horizonte = h
+            
+            return {
+                "algoritmo": "XGBoost",
+                "metricas_globales": metricas_globales,
+                "por_horizonte": por_horizonte,
+                "horizonte_optimo": mejor_horizonte,
+                "meta": {
+                    "nota": "Métricas calculadas dinámicamente de backtest_results",
+                    "timestamp": datetime.now().isoformat()
+                }
+            }
+            
+        except Exception as e:
+            logger.error(f"Error obteniendo métricas del modelo: {str(e)}")
+            return {"error": str(e)}
 
 
 class InventarioService:
     """Servicio para operaciones de inventario"""
     
     @staticmethod
-    async def obtener_skus_en_riesgo(horizonte: int = 14) -> List[Dict[str, Any]]:
+    async def obtener_skus_en_riesgo(horizonte: int = None) -> List[Dict[str, Any]]:
         """
         Obtiene SKUs con stock proyectado negativo
         
         Args:
-            horizonte: Horizonte de predicción (default: 14 días óptimo)
+            horizonte: Horizonte de predicción (default: configurable)
             
         Returns:
             list: SKUs en riesgo ordenados por urgencia
@@ -192,6 +248,10 @@ class InventarioService:
         try:
             if supabase_client is None:
                 return []
+            
+            # Usar horizonte configurable si no se especifica
+            if horizonte is None:
+                horizonte = settings.DEFAULT_HORIZON
             
             columna_stock = f"stock_proyectado_{horizonte}d"
             
@@ -209,15 +269,22 @@ class InventarioService:
 
 
 class ValidacionService:
-    """Servicio para validación de coherencia con la tesis"""
+    """
+    Servicio para validación de coherencia de datos.
+    
+    NOTA: Este servicio NO valida contra valores "esperados" hardcodeados.
+    En su lugar, valida la integridad interna de los datos.
+    """
     
     @staticmethod
-    async def validar_coherencia_datos() -> dict:
+    async def validar_integridad_datos() -> dict:
         """
-        Valida que los datos en BD sean coherentes con la tesis
+        Valida la integridad de los datos cargados.
+        
+        NO compara contra valores hardcodeados - verifica consistencia interna.
         
         Returns:
-            dict: Resultado de validación con discrepancias
+            dict: Resultado de validación con estadísticas calculadas
         """
         validaciones = {}
         
@@ -225,46 +292,78 @@ class ValidacionService:
             if supabase_client is None:
                 return {"error": "Cliente no disponible"}
             
-            # Validar catálogo (120 SKUs)
+            # Contar catálogo (dinámico)
             catalogo = supabase_client.table('catalogo_medicamentos').select('count', count='exact').execute()
-            validaciones["catalogo_medicamentos"] = {
-                "actual": catalogo.count,
-                "esperado": settings.TOTAL_SKUS,
-                "valido": catalogo.count == settings.TOTAL_SKUS
-            }
+            total_skus = catalogo.count
             
-            # Validar ventas (10,800 registros)
+            # Contar ventas (dinámico)
             ventas = supabase_client.table('ventas_diarias').select('count', count='exact').execute()
+            total_ventas = ventas.count
+            
+            # Verificar SKUs en ventas vs catálogo
+            skus_ventas = supabase_client.table('ventas_diarias').select('sku').execute()
+            skus_unicos_ventas = len(set(v['sku'] for v in skus_ventas.data)) if skus_ventas.data else 0
+            
+            validaciones["catalogo_medicamentos"] = {
+                "total_skus": total_skus,
+                "estado": "OK" if total_skus > 0 else "SIN_DATOS"
+            }
+            
             validaciones["ventas_diarias"] = {
-                "actual": ventas.count,
-                "esperado": settings.TOTAL_REGISTROS_VENTAS,
-                "valido": ventas.count == settings.TOTAL_REGISTROS_VENTAS
+                "total_registros": total_ventas,
+                "skus_con_ventas": skus_unicos_ventas,
+                "cobertura_skus": round((skus_unicos_ventas / total_skus) * 100, 1) if total_skus > 0 else 0,
+                "estado": "OK" if total_ventas > 0 else "SIN_DATOS"
             }
             
-            # Validar backtest (360 registros)
-            backtest = supabase_client.table('backtest_results').select('count', count='exact').execute()
-            validaciones["backtest_results"] = {
-                "actual": backtest.count,
-                "esperado": settings.TOTAL_BACKTEST_RECORDS,
-                "valido": backtest.count == settings.TOTAL_BACKTEST_RECORDS
-            }
+            # Verificar backtest (opcional - puede no existir aún)
+            try:
+                backtest = supabase_client.table('backtest_results').select('count', count='exact').execute()
+                backtest_skus = supabase_client.table('backtest_results').select('sku').execute()
+                skus_backtest = len(set(b['sku'] for b in backtest_skus.data)) if backtest_skus.data else 0
+                
+                validaciones["backtest_results"] = {
+                    "total_registros": backtest.count,
+                    "skus_evaluados": skus_backtest,
+                    "cobertura_skus": round((skus_backtest / total_skus) * 100, 1) if total_skus > 0 else 0,
+                    "estado": "OK" if backtest.count > 0 else "PENDIENTE_EJECUCION"
+                }
+            except:
+                validaciones["backtest_results"] = {"estado": "TABLA_NO_EXISTE"}
             
-            # Validar evaluación alertas (240 registros)
-            evaluacion = supabase_client.table('alert_evaluation_results').select('count', count='exact').execute()
-            validaciones["alert_evaluation"] = {
-                "actual": evaluacion.count,
-                "esperado": settings.TOTAL_ALERTAS_EVALUADAS,
-                "valido": evaluacion.count == settings.TOTAL_ALERTAS_EVALUADAS
-            }
+            # Verificar evaluación alertas (opcional)
+            try:
+                evaluacion = supabase_client.table('alert_evaluation_results').select('count', count='exact').execute()
+                eval_skus = supabase_client.table('alert_evaluation_results').select('sku').execute()
+                skus_eval = len(set(e['sku'] for e in eval_skus.data)) if eval_skus.data else 0
+                
+                validaciones["alert_evaluation"] = {
+                    "total_registros": evaluacion.count,
+                    "skus_evaluados": skus_eval,
+                    "cobertura_skus": round((skus_eval / total_skus) * 100, 1) if total_skus > 0 else 0,
+                    "estado": "OK" if evaluacion.count > 0 else "PENDIENTE_EJECUCION"
+                }
+            except:
+                validaciones["alert_evaluation"] = {"estado": "TABLA_NO_EXISTE"}
             
-            todas_validas = all(v["valido"] for v in validaciones.values())
+            # Determinar integridad general
+            estados = [v.get("estado", "UNKNOWN") for v in validaciones.values()]
+            integridad_ok = all(e in ["OK", "PENDIENTE_EJECUCION", "TABLA_NO_EXISTE"] for e in estados)
             
             return {
-                "coherencia_total": todas_validas,
+                "integridad_ok": integridad_ok,
                 "validaciones": validaciones,
-                "timestamp": datetime.now().isoformat()
+                "resumen": {
+                    "total_skus_sistema": total_skus,
+                    "total_registros_ventas": total_ventas
+                },
+                "meta": {
+                    "nota": "Validación de integridad interna (sin valores hardcodeados)",
+                    "principio": "CÁLCULO DINÁMICO",
+                    "timestamp": datetime.now().isoformat()
+                }
             }
             
         except Exception as e:
-            logger.error(f"Error validando coherencia: {str(e)}")
+            logger.error(f"Error validando integridad: {str(e)}")
             return {"error": str(e)}

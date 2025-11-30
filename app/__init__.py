@@ -1,18 +1,21 @@
 """
-Sistema de Alertas Predictivas - Farmacias Siman
-Backend FastAPI
+Sistema Predictivo de Inventario Farmacéutico - Backend FastAPI
+Versión: 2.1.0 - SaaS Genérico con Cálculo Dinámico
 
-Versión: 1.1.0
-Autor: Gary González Zepeda
-Maestría: GTI, UNITEC Honduras
+PRINCIPIO FUNDAMENTAL:
+"CÁLCULO DINÁMICO - CERO HARDCODEO DE MÉTRICAS"
 
-Métricas verificadas del proyecto:
-- 120 SKUs (MED001-MED120)
-- 10,800 registros de ventas
-- XGBoost MAE: 379.69, MAPE: 3.85%
-- 71.7% alertas accionables
-- Viabilidad: 89/100 (ALTAMENTE VIABLE)
+Características:
+- SKUs variables según datos del cliente
+- Registros de ventas variables según período cargado
+- Métricas ML calculadas dinámicamente de backtest_results
+- % alertas accionables calculado de alert_evaluation_results
+- Viabilidad calculada de múltiples fuentes
+
+El sistema escala automáticamente según los datos cargados.
 """
 
-__version__ = "1.1.0"
+__version__ = "2.1.0"
 __author__ = "Gary González Zepeda"
+__email__ = "gary.gonzalez@unitec.edu"
+__project__ = "Tesis GTI - UNITEC Honduras"

@@ -1,8 +1,12 @@
 """
-Modelos Pydantic - Farmacias Siman
-Sistema de Alertas Predictivas
+Modelos Pydantic - Sistema Predictivo de Inventario Farmacéutico
+Versión: 2.1 - SaaS Genérico con Cálculo Dinámico
 
-Todos los modelos con validaciones y documentación
+PRINCIPIO FUNDAMENTAL:
+"CÁLCULO DINÁMICO - CERO HARDCODEO DE MÉTRICAS"
+
+Todos los modelos con validaciones. Las cantidades específicas (SKUs, registros, métricas)
+se calculan dinámicamente de los datos cargados, no se documentan como valores fijos.
 """
 
 from pydantic import BaseModel, Field, ConfigDict
@@ -17,16 +21,16 @@ from enum import Enum
 
 class CategoriaABC(str, Enum):
     """Categoría ABC de medicamentos (Pareto)"""
-    A = "A"  # Alto valor (17 SKUs)
-    B = "B"  # Medio valor (61 SKUs)
-    C = "C"  # Bajo valor (42 SKUs)
+    A = "A"  # Alto valor
+    B = "B"  # Medio valor
+    C = "C"  # Bajo valor
 
 
 class NivelRiesgo(str, Enum):
-    """Nivel de riesgo de alerta"""
-    CRITICAL = "CRITICAL"  # 0 alertas en OE4
-    HIGH = "HIGH"          # 109 alertas (45.4%)
-    MEDIUM = "MEDIUM"      # 131 alertas (54.6%)
+    """Nivel de riesgo de alerta - Solo 3 niveles (sin LOW)"""
+    CRITICAL = "CRITICAL"  # Máxima urgencia
+    HIGH = "HIGH"          # Alta urgencia
+    MEDIUM = "MEDIUM"      # Urgencia moderada
 
 
 class EstadoAlerta(str, Enum):
@@ -46,7 +50,7 @@ class RolUsuario(str, Enum):
 class HorizontePrediccion(int, Enum):
     """Horizontes de predicción válidos"""
     CORTO = 7
-    OPTIMO = 14  # Horizonte óptimo según OE2
+    OPTIMO = 14  # Horizonte por defecto
     LARGO = 28
 
 
@@ -74,12 +78,12 @@ class ErrorResponse(BaseModel):
 
 
 # =====================================================================
-# MEDICAMENTO (120 SKUs - MED001 a MED120)
+# MEDICAMENTO (variable según datos del cliente)
 # =====================================================================
 
 class MedicamentoBase(BaseModel):
     """Datos básicos de medicamento"""
-    sku: str = Field(..., description="SKU único (MED001-MED120)")
+    sku: str = Field(..., description="SKU único del medicamento")
     nombre_comercial: str = Field(..., max_length=200)
     nombre_generico: str = Field(..., max_length=200)
     
@@ -89,17 +93,17 @@ class MedicamentoBase(BaseModel):
 class MedicamentoCompleto(MedicamentoBase):
     """Medicamento con todos los campos del catálogo"""
     codigo_atc: Optional[str] = Field(None, description="Código ATC")
-    grupo_terapeutico: str = Field(..., description="Uno de 25 grupos")
+    grupo_terapeutico: str = Field(..., description="Grupo terapéutico")
     presentacion: str
     concentracion: str
     demanda_base: float = Field(..., ge=0)
     variabilidad: float = Field(..., ge=0, le=1)
     categoria_abc: CategoriaABC
     prob_quiebre: float = Field(..., ge=0, le=1)
-    lead_time_dias: int = Field(..., ge=1, le=30, description="3-7 días típico")
+    lead_time_dias: int = Field(..., ge=1, le=30, description="Tiempo de entrega del proveedor")
     stock_seguridad: int = Field(..., ge=0)
     lote_minimo: int = Field(..., ge=1)
-    es_esencial: bool = Field(default=True, description="105 de 120 son esenciales")
+    es_esencial: bool = Field(default=True, description="Medicamento esencial")
     requiere_receta: bool = Field(default=False)
     proveedor: str
     precio_unitario_lps: float = Field(..., ge=0)
@@ -114,21 +118,21 @@ class MedicamentoConInventario(MedicamentoCompleto):
 
 
 # =====================================================================
-# VENTA DIARIA (10,800 registros)
+# VENTA DIARIA (variable según datos cargados)
 # =====================================================================
 
 class VentaDiaria(BaseModel):
     """Registro de venta diaria"""
     id: Optional[int] = None
-    fecha: date = Field(..., description="2025-08-02 a 2025-10-30")
+    fecha: date = Field(..., description="Fecha de la venta")
     sku: str
-    demanda: int = Field(..., ge=0, description="430 registros con demanda=0")
+    demanda: int = Field(..., ge=0, description="Unidades vendidas")
     
     model_config = ConfigDict(from_attributes=True)
 
 
 class VentaDiariaEstadisticas(BaseModel):
-    """Estadísticas de ventas"""
+    """Estadísticas de ventas - Calculadas dinámicamente"""
     total_registros: int
     demanda_total: int
     demanda_promedio: float
@@ -178,18 +182,18 @@ class InventarioConMedicamento(InventarioActual):
 class PrediccionBase(BaseModel):
     """Predicción base"""
     sku: str
-    horizonte_dias: int = Field(..., description="7, 14 (óptimo), o 28 días")
+    horizonte_dias: int = Field(..., description="Horizonte de predicción (7, 14, 28 días)")
     demanda_predicha: float = Field(..., ge=0)
     
     model_config = ConfigDict(from_attributes=True)
 
 
 class PrediccionCompleta(PrediccionBase):
-    """Predicción con métricas"""
+    """Predicción con métricas - Valores calculados dinámicamente"""
     id: Optional[int] = None
     fecha_prediccion: datetime
-    mae: Optional[float] = Field(None, description="MAE promedio: 379.69")
-    mape: Optional[float] = Field(None, description="MAPE promedio: 3.85%")
+    mae: Optional[float] = Field(None, description="Mean Absolute Error")
+    mape: Optional[float] = Field(None, description="Mean Absolute Percentage Error")
     sesgo: Optional[float] = None
     confianza: Optional[float] = Field(None, ge=0, le=1)
     factores_principales: Optional[Dict[str, Any]] = None
@@ -217,7 +221,7 @@ class AlertaBase(BaseModel):
     sku: str
     nivel_riesgo: NivelRiesgo
     dias_hasta_stockout: int = Field(..., ge=0)
-    score_urgencia: float = Field(..., ge=0, le=1, description="Promedio: 0.74")
+    score_urgencia: float = Field(..., ge=0, le=1, description="Score de urgencia (0-1)")
     
     model_config = ConfigDict(from_attributes=True)
 
@@ -255,7 +259,7 @@ class AlertaUpdate(BaseModel):
 
 
 class AtenderAlertaRequest(BaseModel):
-    """Request para atender alerta (RF-005)"""
+    """Request para atender alerta"""
     accion_tomada: str = Field(..., max_length=500, description="Descripción de la acción")
     atendida_por: str = Field(..., max_length=100, description="Nombre del responsable")
 
@@ -266,17 +270,17 @@ class DescartarAlertaRequest(BaseModel):
 
 
 # =====================================================================
-# BACKTEST (360 registros - OE2)
+# BACKTEST (variable según SKUs × horizontes)
 # =====================================================================
 
 class BacktestResult(BaseModel):
-    """Resultado de backtesting walk-forward"""
+    """Resultado de backtesting walk-forward - Métricas calculadas dinámicamente"""
     id: Optional[int] = None
     sku: str
     algorithm: str = "XGBoost"
-    horizon: int = Field(..., description="7, 14, o 28 días")
-    mae: float = Field(..., ge=0, description="Promedio: 379.69")
-    mape: float = Field(..., ge=0, description="Promedio: 3.85%")
+    horizon: int = Field(..., description="Horizonte en días (7, 14, 28)")
+    mae: float = Field(..., ge=0, description="Mean Absolute Error")
+    mape: float = Field(..., ge=0, description="Mean Absolute Percentage Error")
     bias: Optional[float] = None
     n_predictions: Optional[int] = None
     
@@ -284,43 +288,43 @@ class BacktestResult(BaseModel):
 
 
 # =====================================================================
-# EVALUACIÓN DE ALERTAS (240 registros - OE4)
+# EVALUACIÓN DE ALERTAS (variable según SKUs × horizontes)
 # =====================================================================
 
 class EvaluacionAlerta(BaseModel):
-    """Resultado de evaluación de alerta"""
+    """Resultado de evaluación de alerta - Métricas calculadas dinámicamente"""
     sku: str
     category: Optional[str] = None
     alert_date: Optional[date] = None
-    prediction_horizon: int = Field(..., description="7 o 14 días")
-    is_actionable: bool = Field(..., description="71.7% son accionables")
+    prediction_horizon: int = Field(..., description="Horizonte en días (7 o 14)")
+    is_actionable: bool = Field(..., description="Si la alerta es accionable")
     risk_level: NivelRiesgo
-    days_until_stockout: int = Field(..., description="Promedio: 8.6 días")
-    urgency_score: float = Field(..., ge=0, le=1, description="Promedio: 0.74")
+    days_until_stockout: int = Field(..., description="Días hasta stockout")
+    urgency_score: float = Field(..., ge=0, le=1, description="Score de urgencia")
     priority_level: Optional[str] = None
-    recommended_order_qty: float = Field(..., ge=0, description="Promedio: 96.1 unidades")
+    recommended_order_qty: float = Field(..., ge=0, description="Cantidad recomendada")
     order_by_date: Optional[date] = None
     current_stock: int = Field(..., ge=0)
     predicted_stock: Optional[float] = None
     safety_stock: int = Field(..., ge=0)
     lead_time: int = Field(..., ge=1)
-    prediction_confidence: float = Field(..., ge=0, le=1, description="100% cumplen mínimo")
-    meets_lead_time: bool = Field(..., description="89.2% cumplen")
-    below_safety_threshold: bool = Field(..., description="77.9% bajo umbral")
-    meets_confidence: bool = Field(..., description="100% cumplen")
-    meets_min_order: bool = Field(..., description="100% cumplen")
+    prediction_confidence: float = Field(..., ge=0, le=1)
+    meets_lead_time: bool = Field(..., description="Cumple lead time")
+    below_safety_threshold: bool = Field(..., description="Bajo umbral seguridad")
+    meets_confidence: bool = Field(..., description="Cumple confianza mínima")
+    meets_min_order: bool = Field(..., description="Cumple lote mínimo")
     
     model_config = ConfigDict(from_attributes=True)
 
 
 # =====================================================================
-# CALIDAD DE DATOS (FD-001 a FD-004)
+# CALIDAD DE DATOS
 # =====================================================================
 
 class CalidadDatosLog(BaseModel):
     """Log de validación de calidad de datos"""
     id: Optional[int] = None
-    codigo_fuente: str = Field(..., description="FD-001 a FD-004")
+    codigo_fuente: str = Field(..., description="Código de fuente de datos")
     nombre_fuente: str
     disponibilidad_pct: float = Field(..., ge=0, le=100)
     completitud_pct: float = Field(..., ge=0, le=100)
@@ -354,17 +358,17 @@ class Usuario(UsuarioBase):
 
 
 # =====================================================================
-# DASHBOARD
+# DASHBOARD - Valores calculados dinámicamente
 # =====================================================================
 
 class DashboardStats(BaseModel):
-    """Estadísticas del dashboard"""
+    """Estadísticas del dashboard - Calculadas dinámicamente"""
     alertas_pendientes: int
     alertas_criticas: int
     alertas_high: int
     skus_en_riesgo: int
     esenciales_en_riesgo: int
-    total_medicamentos: int = 120
+    total_medicamentos: int  # Calculado de catalogo_medicamentos
     fecha_actualizacion: datetime
 
 
@@ -375,8 +379,7 @@ class ResumenAlertas(BaseModel):
 
 
 class PerformanceML(BaseModel):
-    """Métricas de performance del modelo ML"""
+    """Métricas de performance del modelo ML - Calculadas dinámicamente"""
     metricas_ml: Dict[str, Any]
-    horizonte_optimo: str = "14d"
-    utilidad_alertas: Dict[str, Any]
-    viabilidad_sistema: int = 89
+    horizonte_optimo: str  # Calculado de backtest_results
+    utilidad_alertas: Dict[str, Any]  # Calculado de alert_evaluation_results

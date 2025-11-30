@@ -116,9 +116,9 @@ Gary González Zepeda - Maestría GTI, UNITEC Honduras
         {"name": "Dashboard", "description": "Estadísticas y resumen ejecutivo (RF-003)"},
         {"name": "Alertas", "description": "Gestión de alertas predictivas (RF-001, RF-002, RF-005)"},
         {"name": "Inventarios", "description": "Control de inventarios (RF-003)"},
-        {"name": "Medicamentos", "description": "Catálogo de 120 SKUs"},
+        {"name": "Medicamentos", "description": "Catálogo de medicamentos (variable)"},
         {"name": "Predicciones ML", "description": "Pronósticos con XGBoost (RF-001, RF-004)"},
-        {"name": "Ventas Diarias", "description": "Histórico de ventas (10,800 registros)"},
+        {"name": "Ventas Diarias", "description": "Histórico de ventas (variable)"},
         {"name": "Backtesting ML", "description": "Validación walk-forward (OE2)"},
         {"name": "Evaluación Alertas", "description": "Métricas de utilidad (OE4)"},
         {"name": "Sistema", "description": "Calidad de datos y viabilidad"}

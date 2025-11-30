@@ -1,6 +1,6 @@
 """
 Configuración del Backend - Sistema Predictivo de Inventario Farmacéutico
-Versión: 2.0 - SaaS Genérico con Cálculo Dinámico
+Versión: 2.1 - SaaS Genérico con Cálculo Dinámico
 
 PRINCIPIO FUNDAMENTAL:
 "CÁLCULO DINÁMICO - CERO HARDCODEO DE MÉTRICAS"
@@ -26,7 +26,7 @@ class Settings(BaseSettings):
     # INFORMACIÓN DE LA APLICACIÓN
     # ==========================================================
     APP_NAME: str = "Sistema Predictivo de Inventario Farmacéutico"
-    APP_VERSION: str = "2.0.0"
+    APP_VERSION: str = "2.1.0"
     APP_DESCRIPTION: str = "API SaaS genérica para gestión predictiva de inventarios farmacéuticos"
     API_V1_PREFIX: str = "/api/v1"
 
@@ -45,10 +45,8 @@ class Settings(BaseSettings):
         "http://localhost:3000",
         "http://localhost:5173",
         "http://localhost:8000",
-        # Producción
-        "https://farmacias-siman-frontend.fly.dev",
-        "https://farmacias-siman-api.fly.dev",
-        "https://farmacias-siman.fly.dev"
+        # Producción - Configurar según cliente
+        "https://*.fly.dev"
     ]
 
     # ==========================================================
@@ -75,6 +73,7 @@ class Settings(BaseSettings):
     # Horizontes de predicción soportados
     PREDICTION_HORIZONS: List[int] = [7, 14, 28]  # días
     ALERT_HORIZONS: List[int] = [7, 14]  # horizontes para evaluación de alertas
+    DEFAULT_HORIZON: int = 14  # Horizonte por defecto para cálculos
 
     # Walk-forward validation para ML
     INITIAL_TRAIN_DAYS: int = 60  # días iniciales de entrenamiento
@@ -97,16 +96,23 @@ class Settings(BaseSettings):
     MOVING_AVG_WINDOWS: List[int] = [7, 14]  # ventanas de MA en días
 
     # ==========================================================
-    # NOTA IMPORTANTE
+    # NOTA IMPORTANTE - PRINCIPIO FUNDAMENTAL
     # ==========================================================
-    # Las siguientes métricas NO están aquí porque se calculan dinámicamente:
-    # - TOTAL_SKUS: Se cuenta de catalogo_medicamentos
-    # - XGBOOST_MAE_PROMEDIO: Se calcula de backtest_results
-    # - ALERTAS_ACCIONABLES_PCT: Se calcula de alert_evaluation_results
-    # - VIABILIDAD_GLOBAL: Se calcula de múltiples fuentes
+    # Las siguientes métricas NUNCA están aquí porque se calculan dinámicamente:
+    #
+    # ❌ TOTAL_SKUS - Se cuenta de catalogo_medicamentos
+    # ❌ TOTAL_REGISTROS_VENTAS - Se cuenta de ventas_diarias
+    # ❌ XGBOOST_MAE_PROMEDIO - Se calcula de backtest_results
+    # ❌ XGBOOST_MAPE_PROMEDIO - Se calcula de backtest_results
+    # ❌ ALERTAS_ACCIONABLES_PCT - Se calcula de alert_evaluation_results
+    # ❌ VIABILIDAD_GLOBAL - Se calcula de múltiples fuentes
+    # ❌ PERIODO_INICIO/FIN - Se obtiene de MIN/MAX(fecha) en ventas_diarias
     #
     # Todas las métricas se obtienen mediante endpoints dedicados que
     # consultan y agregan datos de las tablas correspondientes.
+    #
+    # El sistema funciona igual con 50, 120, 500 o 10,000 SKUs.
+    # Las métricas cambian automáticamente cuando los datos cambian.
     # ==========================================================
 
     class Config:
