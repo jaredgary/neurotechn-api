@@ -1,17 +1,14 @@
 """
 Aplicación principal FastAPI
-Sistema de Alertas Predictivas - Farmacias Siman
+Sistema Predictivo de Inventario Farmacéutico
 
-Versión: 1.1.0 - Auditoría completada
+Versión: 2.0.0 - SaaS Genérico con Cálculo Dinámico
 Autor: Gary González Zepeda
-Fecha: 2025-11-27
+Fecha: 2025-11-30
 
-Métricas verificadas:
-- 120 SKUs (MED001-MED120)
-- 10,800 registros de ventas
-- XGBoost MAE: 379.69, MAPE: 3.85%
-- 71.7% alertas accionables
-- Viabilidad: 89/100 (ALTAMENTE VIABLE)
+PRINCIPIO FUNDAMENTAL:
+"CÁLCULO DINÁMICO - CERO HARDCODEO DE MÉTRICAS"
+Todas las métricas se calculan dinámicamente de los datos cargados.
 """
 
 from fastapi import FastAPI, Request, status
@@ -44,29 +41,32 @@ async def lifespan(app: FastAPI):
     """
     # Startup
     logger.info("=" * 60)
-    logger.info("🚀 Iniciando Sistema Predictivo - Farmacias Siman")
+    logger.info("🚀 Iniciando Sistema Predictivo de Inventario")
     logger.info("=" * 60)
     logger.info(f"   Versión: {settings.APP_VERSION}")
     logger.info(f"   Entorno: {'DEBUG' if settings.DEBUG else 'PRODUCTION'}")
     logger.info(f"   Supabase: {settings.SUPABASE_URL[:50]}...")
     logger.info("-" * 60)
-    logger.info("📊 Métricas del Proyecto (Verificadas):")
-    logger.info(f"   Total SKUs: {settings.TOTAL_SKUS}")
-    logger.info(f"   Registros ventas: {settings.TOTAL_REGISTROS_VENTAS}")
-    logger.info(f"   XGBoost MAE: {settings.XGBOOST_MAE_PROMEDIO}")
-    logger.info(f"   XGBoost MAPE: {settings.XGBOOST_MAPE_PROMEDIO}%")
-    logger.info(f"   Horizonte óptimo: {settings.HORIZONTE_OPTIMO} días")
-    logger.info(f"   Alertas accionables: {settings.ALERTAS_ACCIONABLES_PCT}%")
-    logger.info(f"   Viabilidad global: {settings.VIABILIDAD_GLOBAL}/100")
+    logger.info("⚙️  Configuración del Sistema:")
+    logger.info(f"   Horizontes ML: {settings.PREDICTION_HORIZONS}")
+    logger.info(f"   Horizontes Alertas: {settings.ALERT_HORIZONS}")
+    logger.info(f"   Algoritmo: XGBoost")
+    logger.info(f"   SLO Disponibilidad: ≥{settings.SLO_DISPONIBILIDAD_PCT}%")
     logger.info("-" * 60)
-    
-    # Verificar conexión a Supabase
+
+    # Verificar conexión a Supabase y mostrar datos cargados
     try:
-        result = supabase_client.table('catalogo_medicamentos').select('count', count='exact').limit(1).execute()
-        logger.info(f"   ✅ Conexión a Supabase exitosa ({result.count} medicamentos)")
+        catalogo = supabase_client.table('catalogo_medicamentos').select('count', count='exact').execute()
+        ventas = supabase_client.table('ventas_diarias').select('count', count='exact').execute()
+        logger.info(f"   ✅ Conexión a Supabase exitosa")
+        logger.info(f"   📊 SKUs cargados: {catalogo.count}")
+        logger.info(f"   📈 Registros ventas: {ventas.count}")
+        logger.info(f"   💡 Métricas ML disponibles en: /api/v1/sistema/metricas-ml")
     except Exception as e:
         logger.error(f"   ❌ Error conectando a Supabase: {str(e)}")
-    
+
+    logger.info("=" * 60)
+    logger.info("📌 PRINCIPIO: Cálculo Dinámico - Cero Hardcodeo de Métricas")
     logger.info("=" * 60)
     
     yield
@@ -79,25 +79,30 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title=settings.APP_NAME,
     description="""
-## Sistema de Alertas Predictivas para Inventario Farmacéutico
+## Sistema Predictivo de Inventario Farmacéutico - SaaS Genérico
 
-API REST para el sistema de información con capacidades predictivas de Farmacias Siman.
+API REST para gestión predictiva de inventarios con Machine Learning.
 
 ### Características principales:
-- **Dashboard**: Estadísticas en tiempo real y resumen ejecutivo
-- **Alertas**: Gestión de alertas de agotamiento con priorización
-- **Inventarios**: Control de stock actual y proyectado
-- **Predicciones**: Pronósticos de demanda con XGBoost
-- **Medicamentos**: Catálogo de 120 SKUs
-- **Ventas**: Histórico de 10,800 registros (90 días)
-- **Backtesting**: Validación de modelo ML (360 registros)
-- **Evaluación**: Métricas de utilidad de alertas (240 registros)
+- **Dashboard**: Estadísticas calculadas dinámicamente en tiempo real
+- **Alertas**: Sistema de alertas accionables con priorización inteligente
+- **Inventarios**: Control de stock actual y proyecciones
+- **Predicciones ML**: Pronósticos de demanda con XGBoost
+- **Backtesting**: Validación walk-forward para evaluación de modelos
+- **Evaluación**: Métricas de utilidad de alertas
 
-### Métricas del Proyecto (OE2/OE4):
-- **MAE promedio**: 379.69 unidades
-- **MAPE promedio**: 3.85%
-- **Alertas accionables**: 71.7%
-- **Viabilidad**: 89/100 (ALTAMENTE VIABLE)
+### Principio Fundamental:
+**"CÁLCULO DINÁMICO - CERO HARDCODEO DE MÉTRICAS"**
+
+Todas las métricas (MAE, MAPE, % accionables, etc.) se calculan dinámicamente de los datos cargados.
+El sistema escala automáticamente según el número de SKUs y registros.
+
+### Endpoints clave:
+- `GET /api/v1/sistema/metricas-ml` - Métricas ML calculadas
+- `GET /api/v1/sistema/metricas-alertas` - Métricas de alertas
+- `GET /api/v1/dashboard/stats` - Estadísticas del sistema
+- `POST /api/v1/backtest/ejecutar` - Ejecutar backtesting
+- `POST /api/v1/evaluacion-alertas/ejecutar` - Evaluar alertas
 
 ### Autor
 Gary González Zepeda - Maestría GTI, UNITEC Honduras
@@ -220,24 +225,48 @@ async def root():
     """
     Endpoint raíz con información del sistema
     """
-    return {
-        "success": True,
-        "data": {
-            "name": settings.APP_NAME,
-            "version": settings.APP_VERSION,
-            "status": "running",
-            "docs": "/docs",
-            "redoc": "/redoc",
-            "metricas_proyecto": {
-                "total_skus": settings.TOTAL_SKUS,
-                "xgboost_mae": settings.XGBOOST_MAE_PROMEDIO,
-                "xgboost_mape": f"{settings.XGBOOST_MAPE_PROMEDIO}%",
-                "alertas_accionables": f"{settings.ALERTAS_ACCIONABLES_PCT}%",
-                "viabilidad": f"{settings.VIABILIDAD_GLOBAL}/100"
-            },
-            "timestamp": datetime.now().isoformat()
+    try:
+        # Contar datos cargados (calculado dinámicamente)
+        catalogo = supabase_client.table('catalogo_medicamentos').select('count', count='exact').execute()
+        ventas = supabase_client.table('ventas_diarias').select('count', count='exact').execute()
+
+        return {
+            "success": True,
+            "data": {
+                "name": settings.APP_NAME,
+                "version": settings.APP_VERSION,
+                "status": "running",
+                "docs": "/docs",
+                "redoc": "/redoc",
+                "sistema": {
+                    "skus_cargados": catalogo.count,
+                    "registros_ventas": ventas.count,
+                    "principio": "CÁLCULO DINÁMICO - CERO HARDCODEO DE MÉTRICAS"
+                },
+                "endpoints_clave": {
+                    "metricas_ml": "/api/v1/sistema/metricas-ml",
+                    "metricas_alertas": "/api/v1/sistema/metricas-alertas",
+                    "dashboard": "/api/v1/dashboard/stats",
+                    "configuracion": "/api/v1/sistema/configuracion"
+                },
+                "timestamp": datetime.now().isoformat()
+            }
         }
-    }
+    except Exception as e:
+        return {
+            "success": True,
+            "data": {
+                "name": settings.APP_NAME,
+                "version": settings.APP_VERSION,
+                "status": "running",
+                "docs": "/docs",
+                "redoc": "/redoc",
+                "sistema": {
+                    "principio": "CÁLCULO DINÁMICO - CERO HARDCODEO DE MÉTRICAS"
+                },
+                "timestamp": datetime.now().isoformat()
+            }
+        }
 
 
 @app.get("/health", tags=["health"])

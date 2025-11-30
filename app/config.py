@@ -1,12 +1,12 @@
 """
-Configuración del Backend - Farmacias Siman
-Versión: 1.1.0 - Con métricas verificadas de tesis
+Configuración del Backend - Sistema Predictivo de Inventario Farmacéutico
+Versión: 2.0 - SaaS Genérico con Cálculo Dinámico
 
-MÉTRICAS VERIFICADAS CONTRA ARCHIVOS FUENTE:
-- benchmarking_results_20251023_073621.csv
-- alert_evaluation_results.csv
-- utility_report.txt
-- MARCO_DE_EVALUACIÓN_DE_VIABILIDAD.pdf
+PRINCIPIO FUNDAMENTAL:
+"CÁLCULO DINÁMICO - CERO HARDCODEO DE MÉTRICAS"
+
+Solo se hardcodean umbrales de negocio configurables.
+Las métricas ML (MAE, MAPE), alertas accionables, etc. se calculan dinámicamente.
 """
 
 from pydantic_settings import BaseSettings
@@ -15,23 +15,28 @@ from typing import List
 
 
 class Settings(BaseSettings):
-    """Configuración centralizada con métricas de tesis verificadas"""
-    
+    """
+    Configuración centralizada del sistema SaaS.
+
+    ✅ SÍ HARDCODEAR: Umbrales de negocio (configurables por empresa)
+    ❌ NUNCA HARDCODEAR: Métricas calculadas (MAE, MAPE, total SKUs, etc.)
+    """
+
     # ==========================================================
     # INFORMACIÓN DE LA APLICACIÓN
     # ==========================================================
-    APP_NAME: str = "Farmacias Siman - Sistema Predictivo"
-    APP_VERSION: str = "1.1.0"
-    APP_DESCRIPTION: str = "API para sistema de alertas predictivas de inventario farmacéutico"
+    APP_NAME: str = "Sistema Predictivo de Inventario Farmacéutico"
+    APP_VERSION: str = "2.0.0"
+    APP_DESCRIPTION: str = "API SaaS genérica para gestión predictiva de inventarios farmacéuticos"
     API_V1_PREFIX: str = "/api/v1"
-    
+
     # ==========================================================
-    # SUPABASE
+    # SUPABASE (Conexión a base de datos)
     # ==========================================================
     SUPABASE_URL: str
     SUPABASE_KEY: str              # anon/public key para cliente
     SUPABASE_SERVICE_KEY: str      # service_role key para operaciones admin
-    
+
     # ==========================================================
     # CORS (Orígenes permitidos para peticiones cross-origin)
     # ==========================================================
@@ -41,11 +46,11 @@ class Settings(BaseSettings):
         "http://localhost:5173",
         "http://localhost:8000",
         # Producción
-        "https://farmacias-siman-frontend.fly.dev",  # Frontend en producción
-        "https://farmacias-siman-api.fly.dev",       # Backend en producción
-        "https://farmacias-siman.fly.dev"            # Legacy/alternativo
+        "https://farmacias-siman-frontend.fly.dev",
+        "https://farmacias-siman-api.fly.dev",
+        "https://farmacias-siman.fly.dev"
     ]
-    
+
     # ==========================================================
     # SERVIDOR
     # ==========================================================
@@ -53,115 +58,57 @@ class Settings(BaseSettings):
     PORT: int = 8000
     DEBUG: bool = False
     LOG_LEVEL: str = "INFO"
-    
+
     # ==========================================================
-    # ALCANCE DEL PROYECTO (OE1 - VERIFICADO)
-    # Fuente: datos_farmacias_siman.csv, catalogo_medicamentos.csv
+    # UMBRALES DE NEGOCIO (Configurables - SÍ hardcodear)
     # ==========================================================
-    TOTAL_SKUS: int = 120                    # MED001-MED120
-    TOTAL_REGISTROS_VENTAS: int = 10800      # 120 SKUs × 90 días
-    PERIODO_INICIO: str = "2025-08-02"
-    PERIODO_FIN: str = "2025-10-30"
-    TOTAL_DIAS: int = 90
-    GRUPOS_TERAPEUTICOS: int = 25            # Códigos ATC
-    MEDICAMENTOS_ESENCIALES: int = 105       # 87.5% del catálogo
-    DEMANDAS_CERO: int = 430                 # 3.98% de registros
-    
-    # Distribución ABC (verificada contra catalogo_medicamentos.csv)
-    CATEGORIA_A: int = 17                    # Alto valor
-    CATEGORIA_B: int = 61                    # Medio valor
-    CATEGORIA_C: int = 42                    # Bajo valor
-    
+
+    # Configuración de Alertas
+    LEAD_TIME_BUFFER_DAYS: int = 2  # Días adicionales al lead time para anticipación
+    SAFETY_STOCK_THRESHOLD: float = 1.0  # Multiplicador de stock de seguridad
+    MIN_CONFIDENCE_THRESHOLD: float = 0.70  # Confianza mínima para que alerta sea accionable
+
+    # Clasificación de riesgo (umbrales en días)
+    RISK_CRITICAL_DAYS: int = 7   # <7 días hasta stockout = CRITICAL
+    RISK_HIGH_DAYS: int = 10      # <10 días = HIGH, ≥10 días = MEDIUM
+
+    # Horizontes de predicción soportados
+    PREDICTION_HORIZONS: List[int] = [7, 14, 28]  # días
+    ALERT_HORIZONS: List[int] = [7, 14]  # horizontes para evaluación de alertas
+
+    # Walk-forward validation para ML
+    INITIAL_TRAIN_DAYS: int = 60  # días iniciales de entrenamiento
+    STEP_SIZE_DAYS: int = 7  # paso de avance en walk-forward
+
+    # SLOs (Service Level Objectives - Objetivos, NO métricas)
+    SLO_DISPONIBILIDAD_PCT: float = 99.0  # % de disponibilidad mensual objetivo
+    SLO_LATENCIA_TABLERO_MS: int = 5000  # <5 segundos para dashboard
+    SLO_LATENCIA_ALERTAS_MS: int = 3000  # <3 segundos para alertas
+    ERROR_BUDGET_HORAS: float = 7.2  # horas de downtime permitidas/mes
+
+    # Configuración de modelos ML
+    XGBOOST_N_ESTIMATORS: int = 50
+    XGBOOST_MAX_DEPTH: int = 4
+    XGBOOST_LEARNING_RATE: float = 0.1
+    XGBOOST_RANDOM_STATE: int = 42
+
+    # Ventanas para features de series temporales
+    LAG_FEATURES: List[int] = [1, 7, 14]  # lags en días
+    MOVING_AVG_WINDOWS: List[int] = [7, 14]  # ventanas de MA en días
+
     # ==========================================================
-    # MÉTRICAS ML - XGBoost (OE2 - VERIFICADO)
-    # Fuente: benchmarking_results_20251023_073621.csv
+    # NOTA IMPORTANTE
     # ==========================================================
-    
-    # Promedios de 3 horizontes (7d, 14d, 28d)
-    XGBOOST_MAE_PROMEDIO: float = 379.69     # unidades (NO redondear a 380)
-    XGBOOST_MAPE_PROMEDIO: float = 3.85      # porcentaje
-    XGBOOST_SESGO_PROMEDIO: float = -191.20  # unidades
-    XGBOOST_TIEMPO_ENTRENAMIENTO: float = 0.08  # segundos (0.076 redondeado)
-    
-    # Por horizonte específico
-    XGBOOST_MAE_7D: float = 428.37
-    XGBOOST_MAE_14D: float = 394.28
-    XGBOOST_MAE_28D: float = 316.41
-    
-    XGBOOST_MAPE_7D: float = 4.40
-    XGBOOST_MAPE_14D: float = 4.01
-    XGBOOST_MAPE_28D: float = 3.14
-    
-    # Horizonte óptimo
-    HORIZONTE_OPTIMO: int = 14               # días (mejor balance precisión-anticipación)
-    
-    # Scoring del algoritmo (OE2)
-    XGBOOST_SCORING: int = 97                # puntos de 100 (1º lugar)
-    
-    # Backtesting
-    TOTAL_BACKTEST_RECORDS: int = 360        # 120 SKUs × 3 horizontes
-    
+    # Las siguientes métricas NO están aquí porque se calculan dinámicamente:
+    # - TOTAL_SKUS: Se cuenta de catalogo_medicamentos
+    # - XGBOOST_MAE_PROMEDIO: Se calcula de backtest_results
+    # - ALERTAS_ACCIONABLES_PCT: Se calcula de alert_evaluation_results
+    # - VIABILIDAD_GLOBAL: Se calcula de múltiples fuentes
+    #
+    # Todas las métricas se obtienen mediante endpoints dedicados que
+    # consultan y agregan datos de las tablas correspondientes.
     # ==========================================================
-    # MÉTRICAS DE ALERTAS (OE4 - VERIFICADO)
-    # Fuente: alert_evaluation_results.csv, utility_report.txt
-    # ==========================================================
-    TOTAL_ALERTAS_EVALUADAS: int = 240       # 120 SKUs × 2 horizontes (7d, 14d)
-    ALERTAS_ACCIONABLES: int = 172           # 71.7%
-    ALERTAS_ACCIONABLES_PCT: float = 71.7
-    
-    # Cumplimiento de criterios
-    CUMPLE_LEAD_TIME: int = 214              # 89.2%
-    BAJO_UMBRAL_SEGURIDAD: int = 187         # 77.9%
-    CUMPLE_CONFIANZA_MINIMA: int = 240       # 100%
-    CUMPLE_PEDIDO_MINIMO: int = 240          # 100%
-    
-    # Por horizonte de predicción
-    ACCIONABLES_7D: int = 52                 # 43.3%
-    ACCIONABLES_14D: int = 120               # 100%
-    
-    # Distribución por nivel de riesgo
-    RIESGO_MEDIUM: int = 131                 # 54.6%
-    RIESGO_HIGH: int = 109                   # 45.4%
-    RIESGO_CRITICAL: int = 0                 # 0%
-    
-    # Métricas operacionales (utility_report.txt)
-    DIAS_PROMEDIO_STOCKOUT: float = 8.6
-    SCORE_URGENCIA_PROMEDIO: float = 0.74
-    CANTIDAD_PROMEDIO_RECOMENDADA: float = 96.1   # unidades
-    TOTAL_RECOMENDADO_ORDENAR: int = 23072        # unidades (NO 23,073)
-    
-    # ==========================================================
-    # SLOs (OE3 - RNF-002, RNF-003)
-    # Fuente: CHECKLIST_WELLARCHITECTED_GCP.pdf, Tabla 43 tesis
-    # ==========================================================
-    SLO_DISPONIBILIDAD_PCT: float = 99.0     # mensual
-    SLO_LATENCIA_TABLERO_MS: int = 5000      # <5s (RNF-002)
-    SLO_LATENCIA_ALERTAS_MS: int = 3000      # <3s
-    ERROR_BUDGET_HORAS: float = 7.2          # horas/mes
-    
-    # Well-Architected (CORREGIDO)
-    WELL_ARCHITECTED_TOTAL: int = 30         # ítems
-    WELL_ARCHITECTED_CUMPLIDOS: int = 21     # 70% (NO 24/80%)
-    
-    # ==========================================================
-    # VIABILIDAD GLOBAL (OE4 - VERIFICADO)
-    # Fuente: MARCO_DE_EVALUACIÓN_DE_VIABILIDAD.pdf
-    # ==========================================================
-    VIABILIDAD_GLOBAL: int = 89              # puntos de 100
-    VIABILIDAD_TECNICA_PCT: int = 94
-    VIABILIDAD_OPERATIVA_PCT: int = 87
-    VIABILIDAD_ECONOMICA_PCT: int = 86
-    
-    # Clasificación
-    CLASIFICACION_VIABILIDAD: str = "ALTAMENTE VIABLE"  # 85-100 pts
-    
-    # ==========================================================
-    # ENCUESTA (OE1 - n=3 participantes)
-    # Fuente: Encuesta.xlsx
-    # ==========================================================
-    PARTICIPANTES_ENCUESTA: int = 3
-    DISPONIBILIDAD_DATOS_PROMEDIO: float = 83.3  # G1: [80,80,90]
-    
+
     class Config:
         env_file = ".env"
         case_sensitive = True

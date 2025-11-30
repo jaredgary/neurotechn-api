@@ -15,10 +15,11 @@ logger = logging.getLogger(__name__)
 @router.get("/stats")
 async def obtener_estadisticas_dashboard():
     """
-    Obtiene estadísticas principales para el dashboard
-    
+    Obtiene estadísticas principales para el dashboard.
+    TODAS las métricas se calculan dinámicamente de los datos.
+
     Returns:
-        dict: Indicadores clave del sistema
+        dict: Indicadores clave del sistema calculados
     """
     try:
         # Total alertas pendientes
@@ -26,39 +27,74 @@ async def obtener_estadisticas_dashboard():
             .select('count', count='exact') \
             .eq('estado', 'pendiente') \
             .execute()
-        
+
         # Alertas críticas
         alertas_criticas = supabase_client.table('alertas') \
             .select('count', count='exact') \
             .eq('estado', 'pendiente') \
             .eq('nivel_riesgo', 'CRITICAL') \
             .execute()
-        
+
         # Alertas HIGH
         alertas_high = supabase_client.table('alertas') \
             .select('count', count='exact') \
             .eq('estado', 'pendiente') \
             .eq('nivel_riesgo', 'HIGH') \
             .execute()
-        
+
         # SKUs con stock proyectado negativo
         inventarios_riesgo = supabase_client.table('inventarios_actuales') \
             .select('count', count='exact') \
             .lt('stock_proyectado_14d', 0) \
             .execute()
-        
-        # Total medicamentos
+
+        # Total medicamentos (calculado dinámicamente)
         total_medicamentos = supabase_client.table('catalogo_medicamentos') \
             .select('count', count='exact') \
             .execute()
-        
+
         # Medicamentos esenciales en riesgo
         esenciales_riesgo = supabase_client.table('inventarios_actuales') \
             .select('*, catalogo_medicamentos!inner(es_esencial)', count='exact') \
             .eq('catalogo_medicamentos.es_esencial', True) \
             .lt('stock_proyectado_14d', 0) \
             .execute()
-        
+
+        # Categorías ABC (calculado dinámicamente)
+        catalogo_abc = supabase_client.table('catalogo_medicamentos') \
+            .select('categoria_abc') \
+            .execute()
+
+        categorias_abc = {'A': 0, 'B': 0, 'C': 0}
+        for med in catalogo_abc.data:
+            cat = med.get('categoria_abc')
+            if cat in categorias_abc:
+                categorias_abc[cat] += 1
+
+        # Total registros de ventas (calculado dinámicamente)
+        total_ventas = supabase_client.table('ventas_diarias') \
+            .select('count', count='exact') \
+            .execute()
+
+        # Período de datos (calculado dinámicamente)
+        ventas_fechas = supabase_client.table('ventas_diarias') \
+            .select('fecha') \
+            .order('fecha') \
+            .execute()
+
+        if ventas_fechas.data:
+            fecha_inicio = ventas_fechas.data[0]['fecha']
+            fecha_fin = ventas_fechas.data[-1]['fecha']
+            from datetime import datetime
+            dias_periodo = (
+                datetime.fromisoformat(fecha_fin.replace('Z', '+00:00')) -
+                datetime.fromisoformat(fecha_inicio.replace('Z', '+00:00'))
+            ).days + 1
+        else:
+            fecha_inicio = None
+            fecha_fin = None
+            dias_periodo = 0
+
         return {
             "success": True,
             "data": {
@@ -68,10 +104,20 @@ async def obtener_estadisticas_dashboard():
                 "skus_en_riesgo": inventarios_riesgo.count,
                 "esenciales_en_riesgo": esenciales_riesgo.count,
                 "total_medicamentos": total_medicamentos.count,
+                "categorias_abc": categorias_abc,
+                "total_registros_ventas": total_ventas.count,
+                "periodo": {
+                    "inicio": fecha_inicio,
+                    "fin": fecha_fin,
+                    "dias": dias_periodo
+                },
                 "fecha_actualizacion": datetime.now().isoformat()
+            },
+            "meta": {
+                "nota": "Todas las métricas calculadas dinámicamente de los datos"
             }
         }
-        
+
     except Exception as e:
         logger.error(f"Error obteniendo estadísticas: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -275,30 +321,38 @@ async def obtener_resumen_general():
 @router.get("/performance-sistema")
 async def obtener_performance_sistema():
     """
-    Obtiene métricas de performance del sistema ML
-    
+    Obtiene métricas de performance del sistema ML.
+    TODAS las métricas se calculan dinámicamente de los datos.
+
     Returns:
-        dict: Métricas de precisión y utilidad
+        dict: Métricas de precisión y utilidad calculadas
     """
     try:
-        # Métricas de backtest (OE2)
+        # Métricas de backtest (OE2) - Calculadas dinámicamente
         backtest = supabase_client.table('backtest_results') \
             .select('mae, mape, horizon') \
             .eq('algorithm', 'XGBoost') \
             .execute()
-        
+
+        if not backtest.data:
+            return {
+                "success": False,
+                "error": "No hay resultados de backtesting. Ejecute /api/v1/backtest/ejecutar primero.",
+                "data": None
+            }
+
         # Calcular promedios por horizonte
         metricas_por_horizonte = {}
         for record in backtest.data:
             horizonte = record['horizon']
             if horizonte not in metricas_por_horizonte:
                 metricas_por_horizonte[horizonte] = {'mae_list': [], 'mape_list': []}
-            
+
             if record.get('mae') is not None and record['mae'] < 10000:  # Filtrar outliers
                 metricas_por_horizonte[horizonte]['mae_list'].append(record['mae'])
             if record.get('mape') is not None and record['mape'] < 100:  # Filtrar outliers
                 metricas_por_horizonte[horizonte]['mape_list'].append(record['mape'])
-        
+
         # Calcular promedios
         metricas = {}
         for horizonte, valores in metricas_por_horizonte.items():
@@ -307,25 +361,44 @@ async def obtener_performance_sistema():
                     "mae_promedio": round(sum(valores['mae_list']) / len(valores['mae_list']), 2),
                     "mape_promedio": round(sum(valores['mape_list']) / len(valores['mape_list']), 2) if valores['mape_list'] else None
                 }
-        
-        # Utilidad de alertas (OE4)
-        total_alertas_evaluadas = 240  # Del estudio OE4
-        alertas_accionables = 172  # Del estudio OE4
-        
+
+        # Identificar horizonte óptimo (menor MAE)
+        mejor_horizonte = min(
+            metricas.items(),
+            key=lambda x: x[1]['mae_promedio']
+        )[0] if metricas else "14d"
+
+        # Utilidad de alertas - Calculado dinámicamente
+        alertas_eval = supabase_client.table('alert_evaluation_results') \
+            .select('is_actionable, count', count='exact') \
+            .execute()
+
+        if alertas_eval.data:
+            total_alertas_evaluadas = alertas_eval.count
+            alertas_accionables = sum(1 for a in alertas_eval.data if a.get('is_actionable'))
+            porcentaje_accionables = round((alertas_accionables / total_alertas_evaluadas) * 100, 1)
+        else:
+            total_alertas_evaluadas = 0
+            alertas_accionables = 0
+            porcentaje_accionables = 0.0
+
         return {
             "success": True,
             "data": {
                 "metricas_ml": metricas,
-                "horizonte_optimo": "14d",
+                "horizonte_optimo": mejor_horizonte,
                 "utilidad_alertas": {
                     "total_evaluadas": total_alertas_evaluadas,
                     "accionables": alertas_accionables,
-                    "porcentaje_accionables": round((alertas_accionables / total_alertas_evaluadas) * 100, 1)
-                },
-                "viabilidad_sistema": 89  # Puntos de 100 (OE4)
+                    "porcentaje_accionables": porcentaje_accionables
+                }
+            },
+            "meta": {
+                "nota": "Todas las métricas calculadas dinámicamente de los datos",
+                "timestamp": datetime.now().isoformat()
             }
         }
-        
+
     except Exception as e:
         logger.error(f"Error obteniendo performance del sistema: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))

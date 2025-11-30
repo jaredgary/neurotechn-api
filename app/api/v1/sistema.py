@@ -1,347 +1,411 @@
 """
-Endpoints para Calidad de Datos y Viabilidad del Sistema
-Acceso a métricas de calidad FD-001 a FD-004 y viabilidad global (89/100)
+Endpoints para Métricas del Sistema
+Versión 2.0 - SaaS Genérico con Cálculo Dinámico
+
+PRINCIPIO: TODAS las métricas se calculan dinámicamente de los datos.
+NO se usan constantes hardcodeadas.
 """
 
-from fastapi import APIRouter, HTTPException, Query
-from typing import Optional
+from fastapi import APIRouter, HTTPException
 from datetime import datetime
 from app.database import supabase_client
 from app.config import settings
+import pandas as pd
 import logging
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
 
 
-# =====================================================================
-# CALIDAD DE DATOS (OE1 - FD-001 a FD-004)
-# =====================================================================
+@router.get("/metricas-ml")
+async def obtener_metricas_ml():
+    """
+    Retorna métricas ML calculadas de los resultados de backtesting.
+
+    IMPORTANTE: Estas métricas cambian cada vez que se re-entrena el modelo.
+    Se calculan dinámicamente de la tabla backtest_results.
+
+    Returns:
+        dict: Métricas ML agregadas por horizonte
+    """
+    try:
+        # Obtener todos los resultados de backtesting
+        result = supabase_client.table('backtest_results') \
+            .select('*') \
+            .eq('algorithm', 'XGBoost') \
+            .execute()
+
+        if not result.data:
+            return {
+                "success": False,
+                "error": "No hay resultados de backtesting. Ejecute /api/v1/backtest/ejecutar primero.",
+                "data": None
+            }
+
+        df = pd.DataFrame(result.data)
+
+        # Calcular métricas globales
+        metricas_globales = {
+            "mae_promedio": round(float(df['mae'].mean()), 2),
+            "mape_promedio": round(float(df['mape'].mean()), 2),
+            "sesgo_promedio": round(float(df['bias'].mean()), 2),
+            "total_backtests": len(df),
+            "skus_evaluados": int(df['sku'].nunique())
+        }
+
+        # Métricas por horizonte
+        por_horizonte = {}
+        for horizon in sorted(df['horizon'].unique()):
+            df_h = df[df['horizon'] == horizon]
+            por_horizonte[f"{horizon}_dias"] = {
+                "mae": round(float(df_h['mae'].mean()), 2),
+                "mape": round(float(df_h['mape'].mean()), 2),
+                "sesgo": round(float(df_h['bias'].mean()), 2),
+                "n_skus": int(df_h['sku'].nunique()),
+                "n_predicciones": int(df_h['n_predictions'].sum()) if 'n_predictions' in df_h.columns else 0
+            }
+
+        # Identificar horizonte óptimo (menor MAE)
+        mejor_horizonte = df.groupby('horizon')['mae'].mean().idxmin()
+
+        # Última actualización
+        if 'created_at' in df.columns:
+            ultima_actualizacion = pd.to_datetime(df['created_at']).max().isoformat()
+        else:
+            ultima_actualizacion = None
+
+        return {
+            "success": True,
+            "data": {
+                "algoritmo": "XGBoost",
+                "metricas_globales": metricas_globales,
+                "por_horizonte": por_horizonte,
+                "horizonte_optimo": {
+                    "dias": int(mejor_horizonte),
+                    "razon": "Menor MAE promedio"
+                }
+            },
+            "meta": {
+                "ultima_actualizacion": ultima_actualizacion,
+                "nota": "Métricas calculadas dinámicamente de tabla backtest_results",
+                "timestamp": datetime.now().isoformat()
+            }
+        }
+
+    except Exception as e:
+        logger.error(f"Error obteniendo métricas ML: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/metricas-alertas")
+async def obtener_metricas_alertas():
+    """
+    Retorna métricas de utilidad de alertas calculadas dinámicamente.
+
+    Se calculan de la tabla alert_evaluation_results.
+
+    Returns:
+        dict: Métricas de alertas accionables y distribución
+    """
+    try:
+        result = supabase_client.table('alert_evaluation_results') \
+            .select('*') \
+            .execute()
+
+        if not result.data:
+            return {
+                "success": False,
+                "error": "No hay evaluaciones de alertas. Ejecute /api/v1/evaluacion-alertas/ejecutar primero.",
+                "data": None
+            }
+
+        df = pd.DataFrame(result.data)
+
+        total_alertas = len(df)
+        accionables = int(df['is_actionable'].sum())
+
+        # Distribución por nivel de riesgo
+        riesgo_dist = df['risk_level'].value_counts().to_dict()
+
+        # Métricas de criterios
+        criterios = {
+            "cumple_lead_time": int(df['meets_lead_time'].sum()),
+            "bajo_umbral_seguridad": int(df['below_safety_threshold'].sum()),
+            "cumple_confianza": int(df['meets_confidence'].sum()),
+            "cumple_pedido_minimo": int(df['meets_min_order'].sum())
+        }
+
+        # Por horizonte
+        por_horizonte = {}
+        for horizon in sorted(df['prediction_horizon'].unique()):
+            df_h = df[df['prediction_horizon'] == horizon]
+            por_horizonte[f"{horizon}_dias"] = {
+                "total_alertas": len(df_h),
+                "accionables": int(df_h['is_actionable'].sum()),
+                "porcentaje_accionables": round(float(df_h['is_actionable'].mean() * 100), 1),
+                "cumple_lead_time_pct": round(float(df_h['meets_lead_time'].mean() * 100), 1)
+            }
+
+        # Métricas operacionales
+        metricas_operacionales = {
+            "dias_promedio_hasta_stockout": round(float(df['days_until_stockout'].mean()), 1),
+            "score_urgencia_promedio": round(float(df['urgency_score'].mean()), 2),
+            "cantidad_promedio_recomendada": round(float(df['recommended_order_qty'].mean()), 1),
+            "total_recomendado_ordenar": int(df['recommended_order_qty'].sum())
+        }
+
+        return {
+            "success": True,
+            "data": {
+                "resumen": {
+                    "total_alertas_evaluadas": total_alertas,
+                    "alertas_accionables": accionables,
+                    "porcentaje_accionables": round(accionables / total_alertas * 100, 1),
+                    "skus_evaluados": int(df['sku'].nunique())
+                },
+                "distribucion_riesgo": {
+                    "CRITICAL": riesgo_dist.get('CRITICAL', 0),
+                    "HIGH": riesgo_dist.get('HIGH', 0),
+                    "MEDIUM": riesgo_dist.get('MEDIUM', 0)
+                },
+                "criterios": {
+                    k: {
+                        "cumplidos": v,
+                        "porcentaje": round(v / total_alertas * 100, 1)
+                    }
+                    for k, v in criterios.items()
+                },
+                "por_horizonte": por_horizonte,
+                "metricas_operacionales": metricas_operacionales
+            },
+            "meta": {
+                "nota": "Métricas calculadas dinámicamente de tabla alert_evaluation_results",
+                "timestamp": datetime.now().isoformat()
+            }
+        }
+
+    except Exception as e:
+        logger.error(f"Error obteniendo métricas de alertas: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 
 @router.get("/calidad-datos")
 async def obtener_calidad_datos():
     """
-    Obtiene métricas de calidad de datos (OE1)
-    
-    Valores verificados (MATRIZ DE DISPONIBILIDAD Y CALIDAD DE DATOS.pdf):
-    - FD-001 (Ventas diarias): 83%
-    - FD-002 (Inventarios): 80%
-    - FD-003 (Catálogo): 100%
-    - FD-004 (Fechas vencimiento): 60%
-    - Promedio: 83.3%
-    
+    Valida y reporta calidad de datos actual del sistema.
+
+    Calcula coberturas dinámicamente de las tablas.
+
     Returns:
         dict: Métricas de calidad por fuente de datos
     """
     try:
-        # Obtener logs de calidad si existen
-        result = supabase_client.table('calidad_datos_log') \
-            .select('*') \
-            .order('fecha_validacion', desc=True) \
-            .limit(10) \
-            .execute()
-        
-        # Valores verificados de la tesis
-        calidad_verificada = {
-            "FD-001": {
-                "fuente": "Ventas diarias",
-                "disponibilidad_pct": 83,
-                "registros_esperados": settings.TOTAL_REGISTROS_VENTAS,
-                "estado": "DISPONIBLE"
-            },
-            "FD-002": {
-                "fuente": "Inventarios",
-                "disponibilidad_pct": 80,
-                "registros_esperados": settings.TOTAL_SKUS,
-                "estado": "DISPONIBLE"
-            },
-            "FD-003": {
-                "fuente": "Catálogo medicamentos",
-                "disponibilidad_pct": 100,
-                "registros_esperados": settings.TOTAL_SKUS,
-                "estado": "COMPLETO"
-            },
-            "FD-004": {
-                "fuente": "Fechas vencimiento",
-                "disponibilidad_pct": 60,
-                "registros_esperados": settings.TOTAL_SKUS,
-                "estado": "PARCIAL"
-            }
-        }
-        
-        promedio = sum(f["disponibilidad_pct"] for f in calidad_verificada.values()) / 4
-        
-        return {
-            "success": True,
-            "data": {
-                "fuentes_datos": calidad_verificada,
-                "promedio_disponibilidad": round(promedio, 1),
-                "promedio_verificado_tesis": settings.DISPONIBILIDAD_DATOS_PROMEDIO,
-                "logs_recientes": result.data if result.data else [],
-                "fecha_evaluacion": datetime.now().isoformat()
-            }
-        }
-        
-    except Exception as e:
-        logger.error(f"Error obteniendo calidad de datos: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@router.get("/calidad-datos/validar")
-async def validar_calidad_actual():
-    """
-    Ejecuta validación de calidad de datos actual en tiempo real
-    
-    Returns:
-        dict: Resultado de validación actual
-    """
-    try:
         validaciones = {}
-        
+
+        # Total SKUs esperados (calculado dinámicamente del catálogo)
+        catalogo = supabase_client.table('catalogo_medicamentos') \
+            .select('count', count='exact') \
+            .execute()
+        total_skus = catalogo.count
+
         # FD-001: Ventas diarias
-        ventas = supabase_client.table('ventas_diarias').select('count', count='exact').execute()
-        ventas_esperadas = settings.TOTAL_REGISTROS_VENTAS
+        ventas = supabase_client.table('ventas_diarias') \
+            .select('count', count='exact') \
+            .execute()
         validaciones["FD-001"] = {
             "fuente": "Ventas diarias",
             "registros_actuales": ventas.count,
-            "registros_esperados": ventas_esperadas,
-            "cobertura_pct": round((ventas.count / ventas_esperadas) * 100, 1) if ventas_esperadas > 0 else 0,
-            "estado": "OK" if ventas.count >= ventas_esperadas else "INCOMPLETO"
+            "estado": "OK" if ventas.count > 0 else "SIN_DATOS"
         }
-        
+
         # FD-002: Inventarios
-        inventarios = supabase_client.table('inventarios_actuales').select('count', count='exact').execute()
+        inventarios = supabase_client.table('inventarios_actuales') \
+            .select('count', count='exact') \
+            .execute()
+        cobertura_inv = round((inventarios.count / total_skus) * 100, 1) if total_skus > 0 else 0
         validaciones["FD-002"] = {
             "fuente": "Inventarios",
             "registros_actuales": inventarios.count,
-            "registros_esperados": settings.TOTAL_SKUS,
-            "cobertura_pct": round((inventarios.count / settings.TOTAL_SKUS) * 100, 1),
-            "estado": "OK" if inventarios.count >= settings.TOTAL_SKUS else "INCOMPLETO"
+            "registros_esperados": total_skus,
+            "cobertura_pct": cobertura_inv,
+            "estado": "OK" if cobertura_inv >= 80 else "INCOMPLETO"
         }
-        
+
         # FD-003: Catálogo
-        catalogo = supabase_client.table('catalogo_medicamentos').select('count', count='exact').execute()
         validaciones["FD-003"] = {
             "fuente": "Catálogo medicamentos",
-            "registros_actuales": catalogo.count,
-            "registros_esperados": settings.TOTAL_SKUS,
-            "cobertura_pct": round((catalogo.count / settings.TOTAL_SKUS) * 100, 1),
-            "estado": "OK" if catalogo.count == settings.TOTAL_SKUS else "INCOMPLETO"
+            "registros_actuales": total_skus,
+            "cobertura_pct": 100,
+            "estado": "COMPLETO"
         }
-        
+
         # FD-004: Fechas vencimiento
         con_vencimiento = supabase_client.table('inventarios_actuales') \
             .select('count', count='exact') \
             .not_.is_('fecha_vencimiento', 'null') \
             .execute()
+        cobertura_venc = round((con_vencimiento.count / total_skus) * 100, 1) if total_skus > 0 else 0
         validaciones["FD-004"] = {
             "fuente": "Fechas vencimiento",
             "registros_actuales": con_vencimiento.count,
-            "registros_esperados": settings.TOTAL_SKUS,
-            "cobertura_pct": round((con_vencimiento.count / settings.TOTAL_SKUS) * 100, 1),
-            "estado": "OK" if con_vencimiento.count >= settings.TOTAL_SKUS * 0.6 else "PARCIAL"
+            "registros_esperados": total_skus,
+            "cobertura_pct": cobertura_venc,
+            "estado": "OK" if cobertura_venc >= 60 else "PARCIAL"
         }
-        
+
         # Calcular promedio
-        promedio = sum(v["cobertura_pct"] for v in validaciones.values()) / 4
-        
+        coberturas = [v.get('cobertura_pct', 0) for v in validaciones.values() if 'cobertura_pct' in v]
+        promedio = round(sum(coberturas) / len(coberturas), 1) if coberturas else 0
+
         return {
             "success": True,
             "data": {
                 "validaciones": validaciones,
-                "promedio_cobertura": round(promedio, 1),
+                "promedio_cobertura": promedio,
                 "estado_general": "OK" if promedio >= 80 else "REQUIERE_ATENCION",
+                "total_skus": total_skus
+            },
+            "meta": {
+                "nota": "Validación ejecutada en tiempo real",
                 "timestamp": datetime.now().isoformat()
             }
         }
-        
+
     except Exception as e:
-        logger.error(f"Error validando calidad: {str(e)}")
+        logger.error(f"Error validando calidad de datos: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
-# =====================================================================
-# VIABILIDAD DEL SISTEMA (OE4)
-# =====================================================================
-
-@router.get("/viabilidad")
-async def obtener_viabilidad_sistema():
+@router.get("/configuracion")
+async def obtener_configuracion_sistema():
     """
-    Obtiene evaluación de viabilidad del sistema (OE4)
-    
-    Valores verificados (MARCO DE EVALUACIÓN DE VIABILIDAD.pdf):
-    - Viabilidad Global: 89/100 puntos (ALTAMENTE VIABLE)
-    - Técnica: 94%
-    - Operativa: 87%
-    - Económica: 86%
-    
+    Retorna configuración actual del sistema (umbrales de negocio).
+
+    Estos son los ÚNICOS valores que pueden estar "hardcodeados" ya que
+    son decisiones de negocio configurables, NO métricas calculadas.
+
     Returns:
-        dict: Evaluación completa de viabilidad
+        dict: Configuración de umbrales y parámetros
     """
     try:
         return {
             "success": True,
             "data": {
-                "evaluacion_global": {
-                    "puntuacion": settings.VIABILIDAD_GLOBAL,
-                    "maximo": 100,
-                    "clasificacion": settings.CLASIFICACION_VIABILIDAD,
-                    "criterios_clasificacion": {
-                        "85-100": "ALTAMENTE VIABLE - Implementación recomendada",
-                        "70-84": "VIABLE CON AJUSTES - Implementación condicionada",
-                        "55-69": "PARCIALMENTE VIABLE - Rediseñar componentes",
-                        "<55": "NO VIABLE - Replantear enfoque"
-                    }
+                "version": settings.APP_VERSION,
+                "umbrales_alertas": {
+                    "lead_time_buffer_days": settings.LEAD_TIME_BUFFER_DAYS,
+                    "safety_stock_threshold": settings.SAFETY_STOCK_THRESHOLD,
+                    "min_confidence_threshold": settings.MIN_CONFIDENCE_THRESHOLD,
+                    "risk_critical_days": settings.RISK_CRITICAL_DAYS,
+                    "risk_high_days": settings.RISK_HIGH_DAYS
                 },
-                "dimensiones": {
-                    "tecnica": {
-                        "puntuacion_pct": settings.VIABILIDAD_TECNICA_PCT,
-                        "peso": "60%",
-                        "componentes": {
-                            "mape_promedio": f"{settings.XGBOOST_MAPE_PROMEDIO}%",
-                            "disponibilidad_sistema": f"≥{settings.SLO_DISPONIBILIDAD_PCT}%",
-                            "latencia_dashboard": f"<{settings.SLO_LATENCIA_TABLERO_MS}ms"
-                        }
-                    },
-                    "operativa": {
-                        "puntuacion_pct": settings.VIABILIDAD_OPERATIVA_PCT,
-                        "peso": "25%",
-                        "componentes": {
-                            "alertas_accionables": f"{settings.ALERTAS_ACCIONABLES_PCT}%",
-                            "horizonte_optimo": f"{settings.HORIZONTE_OPTIMO} días"
-                        }
-                    },
-                    "economica": {
-                        "puntuacion_pct": settings.VIABILIDAD_ECONOMICA_PCT,
-                        "peso": "15%",
-                        "componentes": {
-                            "costo_mensual_estimado": "$40-60 USD",
-                            "roi_estimado": "Reducción de pérdidas por quiebres"
-                        }
-                    }
+                "horizontes_prediccion": {
+                    "horizontes_ml": settings.PREDICTION_HORIZONS,
+                    "horizontes_alertas": settings.ALERT_HORIZONS
                 },
-                "metricas_clave": {
-                    "ml": {
-                        "algoritmo": "XGBoost",
-                        "mae_promedio": settings.XGBOOST_MAE_PROMEDIO,
-                        "mape_promedio": settings.XGBOOST_MAPE_PROMEDIO,
-                        "scoring": f"{settings.XGBOOST_SCORING}/100"
-                    },
-                    "alertas": {
-                        "evaluadas": settings.TOTAL_ALERTAS_EVALUADAS,
-                        "accionables": settings.ALERTAS_ACCIONABLES,
-                        "porcentaje": f"{settings.ALERTAS_ACCIONABLES_PCT}%"
-                    },
-                    "arquitectura": {
-                        "well_architected_cumplidos": settings.WELL_ARCHITECTED_CUMPLIDOS,
-                        "well_architected_total": settings.WELL_ARCHITECTED_TOTAL,
-                        "cumplimiento_pct": round((settings.WELL_ARCHITECTED_CUMPLIDOS / settings.WELL_ARCHITECTED_TOTAL) * 100)
-                    }
+                "ml_config": {
+                    "algorithm": "XGBoost",
+                    "n_estimators": settings.XGBOOST_N_ESTIMATORS,
+                    "max_depth": settings.XGBOOST_MAX_DEPTH,
+                    "learning_rate": settings.XGBOOST_LEARNING_RATE
                 },
-                "fuente": "MARCO_DE_EVALUACIÓN_DE_VIABILIDAD.pdf"
+                "walk_forward": {
+                    "initial_train_days": settings.INITIAL_TRAIN_DAYS,
+                    "step_size_days": settings.STEP_SIZE_DAYS
+                },
+                "slos": {
+                    "disponibilidad_pct": settings.SLO_DISPONIBILIDAD_PCT,
+                    "latencia_tablero_ms": settings.SLO_LATENCIA_TABLERO_MS,
+                    "latencia_alertas_ms": settings.SLO_LATENCIA_ALERTAS_MS
+                }
+            },
+            "meta": {
+                "nota": "Esta es configuración de umbrales, NO métricas calculadas",
+                "principio": "CÁLCULO DINÁMICO - CERO HARDCODEO DE MÉTRICAS"
             }
         }
-        
+
     except Exception as e:
-        logger.error(f"Error obteniendo viabilidad: {str(e)}")
+        logger.error(f"Error obteniendo configuración: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.get("/metricas-tesis")
-async def obtener_metricas_tesis():
+@router.get("/resumen-completo")
+async def obtener_resumen_completo():
     """
-    Obtiene todas las métricas verificadas de la tesis en un solo endpoint
-    
+    Retorna resumen completo del sistema con TODAS las métricas calculadas.
+
+    Consolida información de múltiples fuentes.
+
     Returns:
-        dict: Métricas consolidadas por objetivo específico
+        dict: Resumen ejecutivo del sistema
     """
     try:
+        # Obtener métricas de cada subsistema
+        metricas_ml = await obtener_metricas_ml()
+        metricas_alertas = await obtener_metricas_alertas()
+        calidad = await obtener_calidad_datos()
+
+        # Información del catálogo
+        catalogo = supabase_client.table('catalogo_medicamentos') \
+            .select('categoria_abc, es_esencial, grupo_terapeutico') \
+            .execute()
+
+        df_cat = pd.DataFrame(catalogo.data)
+
+        categorias_abc = df_cat['categoria_abc'].value_counts().to_dict() if not df_cat.empty else {}
+        esenciales = int(df_cat['es_esencial'].sum()) if not df_cat.empty else 0
+        grupos_terapeuticos = int(df_cat['grupo_terapeutico'].nunique()) if not df_cat.empty else 0
+
+        # Ventas
+        ventas = supabase_client.table('ventas_diarias') \
+            .select('fecha, demanda') \
+            .execute()
+
+        df_ventas = pd.DataFrame(ventas.data)
+        if not df_ventas.empty:
+            df_ventas['fecha'] = pd.to_datetime(df_ventas['fecha'])
+            fecha_inicio = df_ventas['fecha'].min().date().isoformat()
+            fecha_fin = df_ventas['fecha'].max().date().isoformat()
+            total_ventas = len(df_ventas)
+            demandas_cero = int((df_ventas['demanda'] == 0).sum())
+        else:
+            fecha_inicio = None
+            fecha_fin = None
+            total_ventas = 0
+            demandas_cero = 0
+
         return {
             "success": True,
             "data": {
                 "proyecto": {
-                    "titulo": "Sistema de Información con Capacidades Predictivas",
-                    "cliente": "Farmacias Siman - Sucursal Circunvalación, SPS",
-                    "investigador": "Gary González Zepeda",
-                    "maestria": "Gestión de Tecnologías de la Información (GTI), UNITEC Honduras"
+                    "nombre": settings.APP_NAME,
+                    "version": settings.APP_VERSION,
+                    "tipo": "SaaS Genérico - Inventario Predictivo"
                 },
-                "OE1_identificacion_requisitos": {
-                    "alcance": {
-                        "total_skus": settings.TOTAL_SKUS,
-                        "registros_historicos": settings.TOTAL_REGISTROS_VENTAS,
-                        "periodo_dias": settings.TOTAL_DIAS,
-                        "fecha_inicio": settings.PERIODO_INICIO,
-                        "fecha_fin": settings.PERIODO_FIN,
-                        "grupos_terapeuticos": settings.GRUPOS_TERAPEUTICOS,
-                        "medicamentos_esenciales": settings.MEDICAMENTOS_ESENCIALES
-                    },
-                    "encuesta": {
-                        "participantes": settings.PARTICIPANTES_ENCUESTA,
-                        "disponibilidad_datos_promedio": settings.DISPONIBILIDAD_DATOS_PROMEDIO
-                    },
-                    "distribucion_abc": {
-                        "A": settings.CATEGORIA_A,
-                        "B": settings.CATEGORIA_B,
-                        "C": settings.CATEGORIA_C
+                "alcance": {
+                    "total_skus": len(df_cat),
+                    "medicamentos_esenciales": esenciales,
+                    "grupos_terapeuticos": grupos_terapeuticos,
+                    "categorias_abc": categorias_abc,
+                    "periodo_datos": {
+                        "inicio": fecha_inicio,
+                        "fin": fecha_fin,
+                        "total_registros_ventas": total_ventas,
+                        "demandas_cero": demandas_cero
                     }
                 },
-                "OE2_tecnicas_ia": {
-                    "algoritmo_ganador": "XGBoost",
-                    "scoring": f"{settings.XGBOOST_SCORING}/100",
-                    "metricas_promedio": {
-                        "mae": settings.XGBOOST_MAE_PROMEDIO,
-                        "mape": settings.XGBOOST_MAPE_PROMEDIO,
-                        "sesgo": settings.XGBOOST_SESGO_PROMEDIO,
-                        "tiempo_entrenamiento": settings.XGBOOST_TIEMPO_ENTRENAMIENTO
-                    },
-                    "por_horizonte": {
-                        "7d": {"mae": settings.XGBOOST_MAE_7D, "mape": settings.XGBOOST_MAPE_7D},
-                        "14d": {"mae": settings.XGBOOST_MAE_14D, "mape": settings.XGBOOST_MAPE_14D},
-                        "28d": {"mae": settings.XGBOOST_MAE_28D, "mape": settings.XGBOOST_MAPE_28D}
-                    },
-                    "horizonte_optimo": settings.HORIZONTE_OPTIMO,
-                    "backtesting_registros": settings.TOTAL_BACKTEST_RECORDS
-                },
-                "OE3_arquitectura": {
-                    "well_architected": {
-                        "cumplidos": settings.WELL_ARCHITECTED_CUMPLIDOS,
-                        "total": settings.WELL_ARCHITECTED_TOTAL,
-                        "porcentaje": round((settings.WELL_ARCHITECTED_CUMPLIDOS / settings.WELL_ARCHITECTED_TOTAL) * 100)
-                    },
-                    "slos": {
-                        "disponibilidad": f"≥{settings.SLO_DISPONIBILIDAD_PCT}% mensual",
-                        "latencia_tablero": f"<{settings.SLO_LATENCIA_TABLERO_MS}ms",
-                        "latencia_alertas": f"<{settings.SLO_LATENCIA_ALERTAS_MS}ms",
-                        "error_budget": f"{settings.ERROR_BUDGET_HORAS}h/mes"
-                    }
-                },
-                "OE4_viabilidad": {
-                    "global": {
-                        "puntuacion": settings.VIABILIDAD_GLOBAL,
-                        "clasificacion": settings.CLASIFICACION_VIABILIDAD
-                    },
-                    "dimensiones": {
-                        "tecnica": settings.VIABILIDAD_TECNICA_PCT,
-                        "operativa": settings.VIABILIDAD_OPERATIVA_PCT,
-                        "economica": settings.VIABILIDAD_ECONOMICA_PCT
-                    },
-                    "alertas": {
-                        "evaluadas": settings.TOTAL_ALERTAS_EVALUADAS,
-                        "accionables": settings.ALERTAS_ACCIONABLES,
-                        "porcentaje": settings.ALERTAS_ACCIONABLES_PCT,
-                        "dias_promedio_stockout": settings.DIAS_PROMEDIO_STOCKOUT,
-                        "score_urgencia_promedio": settings.SCORE_URGENCIA_PROMEDIO,
-                        "total_ordenar": settings.TOTAL_RECOMENDADO_ORDENAR
-                    },
-                    "distribucion_riesgo": {
-                        "MEDIUM": settings.RIESGO_MEDIUM,
-                        "HIGH": settings.RIESGO_HIGH,
-                        "CRITICAL": settings.RIESGO_CRITICAL
-                    }
-                }
+                "metricas_ml": metricas_ml.get('data') if metricas_ml.get('success') else None,
+                "metricas_alertas": metricas_alertas.get('data') if metricas_alertas.get('success') else None,
+                "calidad_datos": calidad.get('data') if calidad.get('success') else None
+            },
+            "meta": {
+                "nota": "TODAS las métricas calculadas dinámicamente de los datos",
+                "principio": "CÁLCULO DINÁMICO - CERO HARDCODEO DE MÉTRICAS",
+                "timestamp": datetime.now().isoformat()
             }
         }
-        
+
     except Exception as e:
-        logger.error(f"Error obteniendo métricas de tesis: {str(e)}")
+        logger.error(f"Error obteniendo resumen completo: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
