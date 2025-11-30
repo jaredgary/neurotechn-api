@@ -1,7 +1,8 @@
 # =====================================================================
-# BACKEND FASTAPI - FARMACIAS SIMAN
-# Versión: 1.1.0 - Auditoría completada
-# Fecha: 2025-11-27
+# BACKEND FASTAPI - Sistema Predictivo de Inventario Farmacéutico
+# Versión: 2.0.0 - SaaS Genérico con Cálculo Dinámico
+# Fecha: 2025-11-30
+# Principio: CÁLCULO DINÁMICO - CERO HARDCODEO DE MÉTRICAS
 # =====================================================================
 
 # FastAPI y servidor ASGI
@@ -14,11 +15,11 @@ pydantic-settings==2.6.0
 supabase==2.9.0
 postgrest==0.17.0
 
-# Procesamiento de datos (CRÍTICO para OE2/OE4)
+# Procesamiento de datos (para ML y evaluación de alertas)
 pandas==2.2.0
 numpy==1.26.4
 
-# Machine Learning (XGBoost - OE2: MAE=379.69, MAPE=3.85%)
+# Machine Learning (XGBoost con walk-forward validation)
 xgboost==2.0.3
 scikit-learn==1.4.0
 

@@ -5,19 +5,11 @@ Modelos Pydantic para Alertas
 from pydantic import BaseModel, Field, ConfigDict
 from datetime import datetime
 from typing import Optional
-from enum import Enum
+from app.models.enums import RiskLevel, AlertStatus
 
-
-class NivelRiesgo(str, Enum):
-    CRITICAL = "CRITICAL"
-    HIGH = "HIGH"
-    MEDIUM = "MEDIUM"
-
-
-class EstadoAlerta(str, Enum):
-    PENDIENTE = "pendiente"
-    ATENDIDA = "atendida"
-    DESCARTADA = "descartada"
+# Alias para compatibilidad con código existente
+NivelRiesgo = RiskLevel
+EstadoAlerta = AlertStatus
 
 
 class Alerta(BaseModel):
