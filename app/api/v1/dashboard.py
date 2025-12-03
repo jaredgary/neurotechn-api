@@ -85,7 +85,6 @@ async def obtener_estadisticas_dashboard():
         if ventas_fechas.data:
             fecha_inicio = ventas_fechas.data[0]['fecha']
             fecha_fin = ventas_fechas.data[-1]['fecha']
-            from datetime import datetime
             dias_periodo = (
                 datetime.fromisoformat(fecha_fin.replace('Z', '+00:00')) -
                 datetime.fromisoformat(fecha_inicio.replace('Z', '+00:00'))
