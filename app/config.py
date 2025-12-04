@@ -1,6 +1,6 @@
 """
 Configuración del Backend - Sistema Predictivo de Inventario Farmacéutico
-Versión: 2.1 - SaaS Genérico con Cálculo Dinámico
+Versión: 2.1.0 - SaaS Genérico con Cálculo Dinámico
 
 PRINCIPIO FUNDAMENTAL:
 "CÁLCULO DINÁMICO - CERO HARDCODEO DE MÉTRICAS"
@@ -12,6 +12,7 @@ Las métricas ML (MAE, MAPE), alertas accionables, etc. se calculan dinámicamen
 from pydantic_settings import BaseSettings
 from functools import lru_cache
 from typing import List
+import os
 
 
 class Settings(BaseSettings):
@@ -33,20 +34,25 @@ class Settings(BaseSettings):
     # ==========================================================
     # SUPABASE (Conexión a base de datos)
     # ==========================================================
-    SUPABASE_URL: str
-    SUPABASE_KEY: str              # anon/public key para cliente
-    SUPABASE_SERVICE_KEY: str      # service_role key para operaciones admin
+    SUPABASE_URL: str = ""
+    SUPABASE_KEY: str = ""              # anon/public key para cliente
+    SUPABASE_SERVICE_KEY: str = ""      # service_role key para operaciones admin
 
     # ==========================================================
-    # CORS (Orígenes permitidos para peticiones cross-origin)
+    # CORS - CRÍTICO: Dominios EXPLÍCITOS (wildcards NO funcionan)
     # ==========================================================
     CORS_ORIGINS: List[str] = [
         # Desarrollo local
         "http://localhost:3000",
         "http://localhost:5173",
         "http://localhost:8000",
-        # Producción - Configurar según cliente
-        "https://*.fly.dev"
+        "http://127.0.0.1:3000",
+        "http://127.0.0.1:5173",
+        "http://127.0.0.1:8000",
+        # Producción Fly.io - DOMINIOS EXACTOS (wildcards NO soportados)
+        "https://farmacias-siman-frontend.fly.dev",
+        "https://farmacias-siman-api.fly.dev",
+        "https://farmacias-siman.fly.dev",
     ]
 
     # ==========================================================
@@ -73,7 +79,6 @@ class Settings(BaseSettings):
     # Horizontes de predicción soportados
     PREDICTION_HORIZONS: List[int] = [7, 14, 28]  # días
     ALERT_HORIZONS: List[int] = [7, 14]  # horizontes para evaluación de alertas
-    DEFAULT_HORIZON: int = 14  # Horizonte por defecto para cálculos
 
     # Walk-forward validation para ML
     INITIAL_TRAIN_DAYS: int = 60  # días iniciales de entrenamiento
@@ -96,28 +101,22 @@ class Settings(BaseSettings):
     MOVING_AVG_WINDOWS: List[int] = [7, 14]  # ventanas de MA en días
 
     # ==========================================================
-    # NOTA IMPORTANTE - PRINCIPIO FUNDAMENTAL
+    # NOTA IMPORTANTE
     # ==========================================================
-    # Las siguientes métricas NUNCA están aquí porque se calculan dinámicamente:
-    #
-    # ❌ TOTAL_SKUS - Se cuenta de catalogo_medicamentos
-    # ❌ TOTAL_REGISTROS_VENTAS - Se cuenta de ventas_diarias
-    # ❌ XGBOOST_MAE_PROMEDIO - Se calcula de backtest_results
-    # ❌ XGBOOST_MAPE_PROMEDIO - Se calcula de backtest_results
-    # ❌ ALERTAS_ACCIONABLES_PCT - Se calcula de alert_evaluation_results
-    # ❌ VIABILIDAD_GLOBAL - Se calcula de múltiples fuentes
-    # ❌ PERIODO_INICIO/FIN - Se obtiene de MIN/MAX(fecha) en ventas_diarias
+    # Las siguientes métricas NO están aquí porque se calculan dinámicamente:
+    # - TOTAL_SKUS: Se cuenta de catalogo_medicamentos
+    # - XGBOOST_MAE_PROMEDIO: Se calcula de backtest_results
+    # - ALERTAS_ACCIONABLES_PCT: Se calcula de alert_evaluation_results
+    # - VIABILIDAD_GLOBAL: Se calcula de múltiples fuentes
     #
     # Todas las métricas se obtienen mediante endpoints dedicados que
     # consultan y agregan datos de las tablas correspondientes.
-    #
-    # El sistema funciona igual con 50, 120, 500 o 10,000 SKUs.
-    # Las métricas cambian automáticamente cuando los datos cambian.
     # ==========================================================
 
     class Config:
         env_file = ".env"
         case_sensitive = True
+        extra = "ignore"  # Ignorar variables de entorno extra
 
 
 @lru_cache()

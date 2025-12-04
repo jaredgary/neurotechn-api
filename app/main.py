@@ -2,13 +2,15 @@
 Aplicación principal FastAPI
 Sistema Predictivo de Inventario Farmacéutico
 
-Versión: 2.0.0 - SaaS Genérico con Cálculo Dinámico
+Versión: 2.1.0 - SaaS Genérico con Cálculo Dinámico
 Autor: Gary González Zepeda
-Fecha: 2025-11-30
+Fecha: 2025-12-04
 
 PRINCIPIO FUNDAMENTAL:
 "CÁLCULO DINÁMICO - CERO HARDCODEO DE MÉTRICAS"
 Todas las métricas se calculan dinámicamente de los datos cargados.
+
+CORRECCIÓN CORS: Headers explícitos en exception handlers
 """
 
 from fastapi import FastAPI, Request, status
@@ -33,6 +35,42 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
+# ==========================================================
+# CORS ORIGINS - Lista explícita (wildcards NO funcionan)
+# ==========================================================
+CORS_ORIGINS = [
+    # Desarrollo local
+    "http://localhost:3000",
+    "http://localhost:5173",
+    "http://localhost:8000",
+    "http://127.0.0.1:3000",
+    "http://127.0.0.1:5173",
+    "http://127.0.0.1:8000",
+    # Producción Fly.io
+    "https://farmacias-siman-frontend.fly.dev",
+    "https://farmacias-siman-api.fly.dev",
+    "https://farmacias-siman.fly.dev",
+]
+
+
+def add_cors_headers(response: JSONResponse, request: Request) -> JSONResponse:
+    """
+    Agrega headers CORS a una respuesta.
+    Necesario para exception handlers que bypassean el middleware.
+    """
+    origin = request.headers.get("origin", "")
+    
+    # Verificar si el origen está permitido
+    if origin in CORS_ORIGINS or "*" in CORS_ORIGINS:
+        response.headers["Access-Control-Allow-Origin"] = origin
+        response.headers["Access-Control-Allow-Credentials"] = "true"
+        response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS, PATCH"
+        response.headers["Access-Control-Allow-Headers"] = "*"
+        response.headers["Access-Control-Expose-Headers"] = "*"
+    
+    return response
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """
@@ -45,28 +83,19 @@ async def lifespan(app: FastAPI):
     logger.info("=" * 60)
     logger.info(f"   Versión: {settings.APP_VERSION}")
     logger.info(f"   Entorno: {'DEBUG' if settings.DEBUG else 'PRODUCTION'}")
-    logger.info(f"   Supabase: {settings.SUPABASE_URL[:50]}...")
-    logger.info("-" * 60)
-    logger.info("⚙️  Configuración del Sistema:")
-    logger.info(f"   Horizontes ML: {settings.PREDICTION_HORIZONS}")
-    logger.info(f"   Horizontes Alertas: {settings.ALERT_HORIZONS}")
-    logger.info(f"   Algoritmo: XGBoost")
-    logger.info(f"   SLO Disponibilidad: ≥{settings.SLO_DISPONIBILIDAD_PCT}%")
+    logger.info(f"   CORS Origins: {len(CORS_ORIGINS)} dominios configurados")
     logger.info("-" * 60)
 
-    # Verificar conexión a Supabase y mostrar datos cargados
+    # Verificar conexión a Supabase
     try:
         catalogo = supabase_client.table('catalogo_medicamentos').select('count', count='exact').execute()
         ventas = supabase_client.table('ventas_diarias').select('count', count='exact').execute()
         logger.info(f"   ✅ Conexión a Supabase exitosa")
         logger.info(f"   📊 SKUs cargados: {catalogo.count}")
         logger.info(f"   📈 Registros ventas: {ventas.count}")
-        logger.info(f"   💡 Métricas ML disponibles en: /api/v1/sistema/metricas-ml")
     except Exception as e:
         logger.error(f"   ❌ Error conectando a Supabase: {str(e)}")
 
-    logger.info("=" * 60)
-    logger.info("📌 PRINCIPIO: Cálculo Dinámico - Cero Hardcodeo de Métricas")
     logger.info("=" * 60)
     
     yield
@@ -83,26 +112,8 @@ app = FastAPI(
 
 API REST para gestión predictiva de inventarios con Machine Learning.
 
-### Características principales:
-- **Dashboard**: Estadísticas calculadas dinámicamente en tiempo real
-- **Alertas**: Sistema de alertas accionables con priorización inteligente
-- **Inventarios**: Control de stock actual y proyecciones
-- **Predicciones ML**: Pronósticos de demanda con XGBoost
-- **Backtesting**: Validación walk-forward para evaluación de modelos
-- **Evaluación**: Métricas de utilidad de alertas
-
 ### Principio Fundamental:
 **"CÁLCULO DINÁMICO - CERO HARDCODEO DE MÉTRICAS"**
-
-Todas las métricas (MAE, MAPE, % accionables, etc.) se calculan dinámicamente de los datos cargados.
-El sistema escala automáticamente según el número de SKUs y registros.
-
-### Endpoints clave:
-- `GET /api/v1/sistema/metricas-ml` - Métricas ML calculadas
-- `GET /api/v1/sistema/metricas-alertas` - Métricas de alertas
-- `GET /api/v1/dashboard/stats` - Estadísticas del sistema
-- `POST /api/v1/backtest/ejecutar` - Ejecutar backtesting
-- `POST /api/v1/evaluacion-alertas/ejecutar` - Evaluar alertas
 
 ### Autor
 Gary González Zepeda - Maestría GTI, UNITEC Honduras
@@ -112,68 +123,50 @@ Gary González Zepeda - Maestría GTI, UNITEC Honduras
     redoc_url="/redoc",
     openapi_url="/openapi.json",
     lifespan=lifespan,
-    openapi_tags=[
-        {"name": "Dashboard", "description": "Estadísticas y resumen ejecutivo (RF-003)"},
-        {"name": "Alertas", "description": "Gestión de alertas predictivas (RF-001, RF-002, RF-005)"},
-        {"name": "Inventarios", "description": "Control de inventarios (RF-003)"},
-        {"name": "Medicamentos", "description": "Catálogo de 120 SKUs"},
-        {"name": "Predicciones ML", "description": "Pronósticos con XGBoost (RF-001, RF-004)"},
-        {"name": "Ventas Diarias", "description": "Histórico de ventas (10,800 registros)"},
-        {"name": "Backtesting ML", "description": "Validación walk-forward (OE2)"},
-        {"name": "Evaluación Alertas", "description": "Métricas de utilidad (OE4)"},
-        {"name": "Sistema", "description": "Calidad de datos y viabilidad"}
-    ]
 )
 
 
 # =====================================================================
-# MIDDLEWARE
+# MIDDLEWARE - ORDEN CRÍTICO
 # =====================================================================
 
-# CORS - Configuración robusta para producción
+# 1. CORS PRIMERO - Debe ser el primer middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.CORS_ORIGINS,
+    allow_origins=CORS_ORIGINS,
     allow_credentials=True,
-    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
+    allow_methods=["*"],
     allow_headers=["*"],
     expose_headers=["*"],
-    max_age=3600,  # Cache preflight requests por 1 hora
+    max_age=3600,
 )
 
-# Compresión GZIP
+# 2. Compresión GZIP después
 app.add_middleware(GZipMiddleware, minimum_size=1000)
 
 
-# Middleware de logging y timing
+# =====================================================================
+# MIDDLEWARE HTTP - Logging y timing
+# =====================================================================
 @app.middleware("http")
 async def log_requests(request: Request, call_next):
-    """
-    Middleware para logging de todas las requests
-    Incluye tiempo de respuesta para monitoreo de SLOs
-    """
+    """Middleware para logging de requests"""
     start_time = time.time()
-    
-    # Log request
-    logger.info(f"→ {request.method} {request.url.path}")
     
     # Procesar request
     response = await call_next(request)
     
-    # Calcular tiempo de procesamiento
-    process_time = time.time() - start_time
-    process_time_ms = process_time * 1000
+    # Calcular tiempo
+    process_time_ms = (time.time() - start_time) * 1000
     
-    # Log response con tiempo
-    log_level = logging.WARNING if process_time_ms > settings.SLO_LATENCIA_TABLERO_MS else logging.INFO
-    logger.log(
-        log_level,
-        f"← {request.method} {request.url.path} "
+    # Log
+    logger.info(
+        f"{request.method} {request.url.path} "
         f"status={response.status_code} "
         f"time={process_time_ms:.0f}ms"
     )
     
-    # Agregar headers de timing
+    # Headers de timing
     response.headers["X-Process-Time"] = f"{process_time_ms:.0f}ms"
     response.headers["X-API-Version"] = settings.APP_VERSION
     
@@ -181,14 +174,15 @@ async def log_requests(request: Request, call_next):
 
 
 # =====================================================================
-# EXCEPTION HANDLERS
+# EXCEPTION HANDLERS - Con CORS headers
 # =====================================================================
 
 @app.exception_handler(RequestValidationError)
 async def validation_exception_handler(request: Request, exc: RequestValidationError):
-    """Maneja errores de validación de Pydantic"""
+    """Maneja errores de validación con CORS headers"""
     logger.error(f"Error de validación: {exc.errors()}")
-    return JSONResponse(
+    
+    response = JSONResponse(
         status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
         content={
             "success": False,
@@ -199,13 +193,17 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
             }
         }
     )
+    
+    # CRÍTICO: Agregar headers CORS
+    return add_cors_headers(response, request)
 
 
 @app.exception_handler(Exception)
 async def general_exception_handler(request: Request, exc: Exception):
-    """Maneja excepciones no capturadas"""
+    """Maneja excepciones no capturadas con CORS headers"""
     logger.error(f"Error no manejado: {str(exc)}", exc_info=True)
-    return JSONResponse(
+    
+    response = JSONResponse(
         status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
         content={
             "success": False,
@@ -216,6 +214,9 @@ async def general_exception_handler(request: Request, exc: Exception):
             }
         }
     )
+    
+    # CRÍTICO: Agregar headers CORS
+    return add_cors_headers(response, request)
 
 
 # =====================================================================
@@ -224,11 +225,8 @@ async def general_exception_handler(request: Request, exc: Exception):
 
 @app.get("/", tags=["root"])
 async def root():
-    """
-    Endpoint raíz con información del sistema
-    """
+    """Endpoint raíz"""
     try:
-        # Contar datos cargados (calculado dinámicamente)
         catalogo = supabase_client.table('catalogo_medicamentos').select('count', count='exact').execute()
         ventas = supabase_client.table('ventas_diarias').select('count', count='exact').execute()
 
@@ -238,34 +236,24 @@ async def root():
                 "name": settings.APP_NAME,
                 "version": settings.APP_VERSION,
                 "status": "running",
-                "docs": "/docs",
-                "redoc": "/redoc",
+                "cors_enabled": True,
+                "cors_origins_count": len(CORS_ORIGINS),
                 "sistema": {
                     "skus_cargados": catalogo.count,
                     "registros_ventas": ventas.count,
-                    "principio": "CÁLCULO DINÁMICO - CERO HARDCODEO DE MÉTRICAS"
-                },
-                "endpoints_clave": {
-                    "metricas_ml": "/api/v1/sistema/metricas-ml",
-                    "metricas_alertas": "/api/v1/sistema/metricas-alertas",
-                    "dashboard": "/api/v1/dashboard/stats",
-                    "configuracion": "/api/v1/sistema/configuracion"
                 },
                 "timestamp": datetime.now().isoformat()
             }
         }
     except Exception as e:
+        logger.error(f"Error en root: {e}")
         return {
             "success": True,
             "data": {
                 "name": settings.APP_NAME,
                 "version": settings.APP_VERSION,
                 "status": "running",
-                "docs": "/docs",
-                "redoc": "/redoc",
-                "sistema": {
-                    "principio": "CÁLCULO DINÁMICO - CERO HARDCODEO DE MÉTRICAS"
-                },
+                "cors_enabled": True,
                 "timestamp": datetime.now().isoformat()
             }
         }
@@ -273,16 +261,10 @@ async def root():
 
 @app.get("/health", tags=["health"])
 async def health_check():
-    """
-    Health check para monitoreo (RNF-003: ≥99% disponibilidad)
-    """
-    checks = {
-        "api": "healthy",
-        "database": "unknown"
-    }
+    """Health check"""
+    checks = {"api": "healthy", "database": "unknown"}
     
     try:
-        # Verificar conexión a Supabase
         result = supabase_client.table('catalogo_medicamentos').select('count', count='exact').limit(1).execute()
         checks["database"] = "healthy"
         checks["medicamentos_count"] = result.count
@@ -290,32 +272,22 @@ async def health_check():
         logger.error(f"Health check failed: {str(e)}")
         checks["database"] = "unhealthy"
         checks["error"] = str(e)
-        
-        return JSONResponse(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            content={
-                "success": False,
-                "data": {
-                    "status": "unhealthy",
-                    "checks": checks,
-                    "timestamp": datetime.now().isoformat()
-                }
-            }
-        )
     
     return {
         "success": True,
         "data": {
-            "status": "healthy",
+            "status": "healthy" if checks["database"] == "healthy" else "degraded",
             "checks": checks,
             "version": settings.APP_VERSION,
-            "slo_disponibilidad": f"≥{settings.SLO_DISPONIBILIDAD_PCT}%",
+            "cors_origins": CORS_ORIGINS,
             "timestamp": datetime.now().isoformat()
         }
     }
 
 
-# Incluir routers de API v1
+# =====================================================================
+# INCLUIR ROUTERS
+# =====================================================================
 app.include_router(
     api_router,
     prefix=settings.API_V1_PREFIX
@@ -323,9 +295,8 @@ app.include_router(
 
 
 # =====================================================================
-# MAIN (para desarrollo local)
+# MAIN (desarrollo local)
 # =====================================================================
-
 if __name__ == "__main__":
     import uvicorn
     
