@@ -181,13 +181,14 @@ async def obtener_metricas_agregadas():
     Obtiene métricas agregadas de backtesting por horizonte.
 
     TODAS las métricas se calculan dinámicamente.
+    Estructura alineada con MetricasBacktest del frontend.
 
     Returns:
         dict: Métricas promedio por horizonte
     """
     try:
         result = supabase_client.table('backtest_results') \
-            .select('horizon, mae, mape, bias') \
+            .select('sku, horizon, mae, mape, bias') \
             .execute()
 
         if not result.data:
@@ -199,58 +200,66 @@ async def obtener_metricas_agregadas():
 
         # Agrupar por horizonte
         por_horizonte = {}
+        skus_unicos = set()
+        all_mae = []
+        all_mape = []
+        all_bias = []
+
         for r in result.data:
             h = r['horizon']
+            skus_unicos.add(r.get('sku'))
+            
             if h not in por_horizonte:
                 por_horizonte[h] = {'mae': [], 'mape': [], 'bias': [], 'count': 0}
 
             if r.get('mae') is not None:
                 por_horizonte[h]['mae'].append(r['mae'])
+                all_mae.append(r['mae'])
             if r.get('mape') is not None:
                 por_horizonte[h]['mape'].append(r['mape'])
+                all_mape.append(r['mape'])
             if r.get('bias') is not None:
                 por_horizonte[h]['bias'].append(r['bias'])
+                all_bias.append(r['bias'])
             por_horizonte[h]['count'] += 1
 
-        # Calcular promedios
-        metricas = {}
+        # Calcular promedios por horizonte
+        metricas_horizonte = {}
         for h, valores in sorted(por_horizonte.items()):
-            metricas[f"{h}d"] = {
+            metricas_horizonte[f"{h}_dias"] = {
                 "horizonte_dias": h,
-                "mae_promedio": round(sum(valores['mae']) / len(valores['mae']), 2) if valores['mae'] else None,
-                "mape_promedio": round(sum(valores['mape']) / len(valores['mape']), 2) if valores['mape'] else None,
-                "bias_promedio": round(sum(valores['bias']) / len(valores['bias']), 2) if valores['bias'] else None,
+                "mae": round(sum(valores['mae']) / len(valores['mae']), 2) if valores['mae'] else 0,
+                "mape": round(sum(valores['mape']) / len(valores['mape']), 2) if valores['mape'] else 0,
+                "sesgo": round(sum(valores['bias']) / len(valores['bias']), 2) if valores['bias'] else 0,
                 "n_registros": valores['count']
             }
-
-        # Calcular promedio global
-        all_mae = []
-        all_mape = []
-        for v in por_horizonte.values():
-            all_mae.extend(v['mae'])
-            all_mape.extend(v['mape'])
-
-        promedio_global = {
-            "mae_promedio_global": round(sum(all_mae) / len(all_mae), 2) if all_mae else None,
-            "mape_promedio_global": round(sum(all_mape) / len(all_mape), 2) if all_mape else None,
-            "total_registros": len(result.data)
-        }
 
         # Identificar horizonte óptimo (menor MAE)
         mejor_horizonte = None
         menor_mae = float('inf')
-        for h, m in metricas.items():
-            if m['mae_promedio'] and m['mae_promedio'] < menor_mae:
-                menor_mae = m['mae_promedio']
+        for h, valores in por_horizonte.items():
+            mae_promedio = sum(valores['mae']) / len(valores['mae']) if valores['mae'] else float('inf')
+            if mae_promedio < menor_mae:
+                menor_mae = mae_promedio
                 mejor_horizonte = h
 
+        # Estructura ALINEADA con MetricasBacktest del frontend
         return {
             "success": True,
             "data": {
-                "por_horizonte": metricas,
-                "promedio_global": promedio_global,
-                "horizonte_optimo": mejor_horizonte,
-                "algoritmo": "XGBoost"
+                "algoritmo": "XGBoost",
+                "metricas_globales": {
+                    "mae_promedio": round(sum(all_mae) / len(all_mae), 2) if all_mae else 0,
+                    "mape_promedio": round(sum(all_mape) / len(all_mape), 2) if all_mape else 0,
+                    "sesgo_promedio": round(sum(all_bias) / len(all_bias), 2) if all_bias else 0,
+                    "total_backtests": len(result.data),
+                    "skus_evaluados": len(skus_unicos)
+                },
+                "por_horizonte": metricas_horizonte,
+                "horizonte_optimo": {
+                    "dias": mejor_horizonte if mejor_horizonte else 14,
+                    "razon": "Menor MAE promedio"
+                }
             },
             "meta": {
                 "nota": "Métricas calculadas dinámicamente",
