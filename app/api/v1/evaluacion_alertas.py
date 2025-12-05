@@ -272,36 +272,40 @@ async def obtener_metricas_consolidadas():
 
         total_count = total.count
 
+        # Obtener SKUs únicos evaluados
+        skus_unicos = len(set(r.get('sku') for r in all_data.data if r.get('sku'))) if all_data.data else 0
+
+        # ✅ CORREGIDO: Estructura alineada con frontend (MetricasEvaluacionAlertas)
         return {
             "success": True,
             "data": {
-                "resumen_accionabilidad": {
-                    "total_alertas": total_count,
-                    "accionables": accionables.count,
-                    "accionables_pct": round((accionables.count / total_count) * 100, 1),
-                    "no_accionables": total_count - accionables.count
+                "resumen": {
+                    "total_alertas_evaluadas": total_count,
+                    "alertas_accionables": accionables.count,
+                    "porcentaje_accionables": round((accionables.count / total_count) * 100, 1),
+                    "skus_evaluados": skus_unicos
                 },
-                "cumplimiento_criterios": {
+                "distribucion_riesgo": riesgo_dist,
+                "criterios": {
                     "cumple_lead_time": {
-                        "cantidad": cumple_lead.count,
+                        "cumplidos": cumple_lead.count,
                         "porcentaje": round((cumple_lead.count / total_count) * 100, 1)
                     },
-                    "bajo_umbral_seguridad": {
-                        "cantidad": bajo_umbral.count,
+                    "cumple_stock_seguridad": {
+                        "cumplidos": bajo_umbral.count,
                         "porcentaje": round((bajo_umbral.count / total_count) * 100, 1)
                     },
                     "cumple_confianza_minima": {
-                        "cantidad": cumple_confianza.count,
+                        "cumplidos": cumple_confianza.count,
                         "porcentaje": round((cumple_confianza.count / total_count) * 100, 1)
                     },
                     "cumple_pedido_minimo": {
-                        "cantidad": cumple_pedido.count,
+                        "cumplidos": cumple_pedido.count,
                         "porcentaje": round((cumple_pedido.count / total_count) * 100, 1)
                     }
                 },
-                "distribucion_riesgo": riesgo_dist,
                 "metricas_operacionales": {
-                    "dias_promedio_stockout": round(sum(dias_stockout) / len(dias_stockout), 1) if dias_stockout else 0,
+                    "dias_promedio_hasta_stockout": round(sum(dias_stockout) / len(dias_stockout), 1) if dias_stockout else 0,
                     "score_urgencia_promedio": round(sum(urgencia) / len(urgencia), 2) if urgencia else 0,
                     "cantidad_promedio_recomendada": round(sum(cantidad) / len(cantidad), 1) if cantidad else 0,
                     "total_recomendado_ordenar": int(sum(cantidad)) if cantidad else 0
