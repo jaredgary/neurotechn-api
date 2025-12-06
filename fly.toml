@@ -8,7 +8,7 @@ app = 'farmacias-siman-api'
 
 # Región: Miami (más cercana a Honduras - ~1400km)
 # Alternativas: dfw (Dallas ~1800km), iad (Virginia ~2500km)
-primary_region = 'mia'
+primary_region = 'dfw'
 
 [build]
   dockerfile = 'Dockerfile'
