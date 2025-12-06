@@ -21,7 +21,7 @@ async def listar_alertas(
     estado: Optional[EstadoAlerta] = Query(None, description="Filtrar por estado"),
     nivel_riesgo: Optional[NivelRiesgo] = Query(None, description="Filtrar por nivel de riesgo"),
     sku: Optional[str] = Query(None, description="Filtrar por SKU"),
-    limit: int = Query(20, ge=1, le=100, description="Número de resultados"),
+    limit: int = Query(120, ge=1, le=150, description="Número de resultados"),
     offset: int = Query(0, ge=0, description="Offset para paginación")
 ):
     """
@@ -31,7 +31,7 @@ async def listar_alertas(
         estado: Filtrar por estado (pendiente/atendida/descartada)
         nivel_riesgo: Filtrar por nivel (CRITICAL/HIGH/MEDIUM)
         sku: Filtrar por SKU específico
-        limit: Máximo de resultados (1-100)
+        limit: Máximo de resultados (1-150)
         offset: Offset para paginación
         
     Returns:
