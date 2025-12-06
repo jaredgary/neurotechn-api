@@ -19,7 +19,7 @@ async def listar_inventarios(
     categoria_abc: Optional[CategoriaABC] = Query(None, description="Filtrar por categoría ABC"),
     es_esencial: Optional[bool] = Query(None, description="Filtrar medicamentos esenciales"),
     stock_bajo: Optional[bool] = Query(None, description="Solo mostrar stock bajo"),
-    limit: int = Query(20, ge=1, le=100),
+    limit: int = Query(120, ge=1, le=150),
     offset: int = Query(0, ge=0)
 ):
     """
